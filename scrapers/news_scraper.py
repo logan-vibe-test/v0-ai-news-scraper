@@ -1,5 +1,5 @@
 """
-News scraper module for AI Voice News Scraper
+News scraper module for AI Voice News Scraper - Updated with better sources
 """
 import asyncio
 import logging
@@ -10,85 +10,81 @@ import feedparser
 
 logger = logging.getLogger(__name__)
 
-# Define news sources - customize this list
+# Updated news sources with more RSS feeds (more reliable)
 NEWS_SOURCES = [
-    # Tech News Sites
-    {
-        'name': 'TechCrunch',
-        'url': 'https://techcrunch.com/category/artificial-intelligence/',
-        'type': 'web',
-        'selector': 'article.post-block'
-    },
-    {
-        'name': 'The Verge',
-        'url': 'https://www.theverge.com/ai-artificial-intelligence',
-        'type': 'web',
-        'selector': 'div.duet--content-cards--content-card'
-    },
-    {
-        'name': 'VentureBeat',
-        'url': 'https://venturebeat.com/category/ai/',
-        'type': 'web',
-        'selector': 'article.Article'
-    },
-    {
-        'name': 'ArsTechnica',
-        'url': 'https://arstechnica.com/tag/artificial-intelligence/',
-        'type': 'web',
-        'selector': 'article.article'
-    },
-    
-    # Company Blogs
-    {
-        'name': 'OpenAI Blog',
-        'url': 'https://openai.com/blog',
-        'type': 'web',
-        'selector': 'a.ui-link'
-    },
-    {
-        'name': 'Google AI Blog',
-        'url': 'https://blog.google/technology/ai/',
-        'type': 'web',
-        'selector': 'a.article-card'
-    },
-    {
-        'name': 'ElevenLabs Blog',
-        'url': 'https://elevenlabs.io/blog',
-        'type': 'web',
-        'selector': 'div.blog-post'
-    },
-    
-    # Add more sources here
-    {
-        'name': 'Anthropic Blog',
-        'url': 'https://www.anthropic.com/news',
-        'type': 'web',
-        'selector': 'article'
-    },
-    {
-        'name': 'Microsoft AI Blog',
-        'url': 'https://blogs.microsoft.com/ai/',
-        'type': 'web',
-        'selector': 'article'
-    },
-    
-    # RSS Feeds
+    # RSS feeds (more reliable than web scraping)
     {
         'name': 'Hacker News',
         'url': 'https://news.ycombinator.com/rss',
         'type': 'rss'
     },
     {
-        'name': 'AI News RSS',
+        'name': 'AI News',
         'url': 'https://artificialintelligence-news.com/feed/',
         'type': 'rss'
+    },
+    {
+        'name': 'VentureBeat AI RSS',
+        'url': 'https://venturebeat.com/category/ai/feed/',
+        'type': 'rss'
+    },
+    {
+        'name': 'TechCrunch AI RSS',
+        'url': 'https://techcrunch.com/category/artificial-intelligence/feed/',
+        'type': 'rss'
+    },
+    {
+        'name': 'The Verge RSS',
+        'url': 'https://www.theverge.com/rss/index.xml',
+        'type': 'rss'
+    },
+    {
+        'name': 'Ars Technica RSS',
+        'url': 'https://feeds.arstechnica.com/arstechnica/index',
+        'type': 'rss'
+    },
+    {
+        'name': 'MIT Technology Review AI',
+        'url': 'https://www.technologyreview.com/topic/artificial-intelligence/feed/',
+        'type': 'rss'
+    },
+    {
+        'name': 'Wired AI RSS',
+        'url': 'https://www.wired.com/feed/tag/ai/latest/rss',
+        'type': 'rss'
+    },
+    
+    # Company blogs (web scraping as backup)
+    {
+        'name': 'OpenAI Blog',
+        'url': 'https://openai.com/blog',
+        'type': 'web',
+        'selector': 'a[href*="/blog/"]'
+    },
+    {
+        'name': 'Google AI Blog',
+        'url': 'https://ai.googleblog.com/',
+        'type': 'web',
+        'selector': 'h2.post-title a, .post-title a'
+    },
+    {
+        'name': 'Anthropic News',
+        'url': 'https://www.anthropic.com/news',
+        'type': 'web',
+        'selector': 'a[href*="/news/"]'
+    },
+    {
+        'name': 'ElevenLabs Blog',
+        'url': 'https://elevenlabs.io/blog',
+        'type': 'web',
+        'selector': 'a[href*="/blog/"]'
     }
 ]
 
 async def scrape_web_source(session, source):
     """Scrape a web-based news source"""
     try:
-        async with session.get(source['url']) as response:
+        async with session.get(source['url'], timeout=10) as response:
             if response.status != 200:
                 logger.error(f"Error fetching {source['name']}: {response.status}")
                 return []
@@ -97,14 +93,14 @@ async def scrape_web_source(session, source):
             soup = BeautifulSoup(html, 'html.parser')
             
             articles = []
-            for element in soup.select(source['selector']):
+            elements = soup.select(source['selector'])
+            
+            logger.info(f"Found {len(elements)} elements from {source['name']}")
+            
+            for element in elements:
                 # Extract data based on source-specific selectors
-                # This is simplified and would need customization per site
-                title_element = element.find(['h1', 'h2', 'h3']) or element
-                link_element = element.find('a') or element
-                
-                title = title_element.get_text().strip()
-                link = link_element.get('href', '')
+                title = element.get_text().strip()
+                link = element.get('href', '')
                 
                 # Handle relative URLs
                 if link and link.startswith('/'):
@@ -112,13 +108,13 @@ async def scrape_web_source(session, source):
                     domain = '/'.join(source['url'].split('/')[:3])
                     link = domain + link
                 
-                if title and link:
+                if title and link and len(title) > 10:  # Basic quality check
                     articles.append({
                         'source': source['name'],
                         'title': title,
                         'url': link,
-                        'published_date': datetime.now().isoformat(),  # Placeholder, would extract from page
-                        'content': '',  # Will be filled when processing
+                        'published_date': datetime.now().isoformat(),
+                        'content': '',
                         'raw_html': str(element)
                     })
             
@@ -133,13 +129,20 @@ async def scrape_rss_source(source):
     try:
         feed = feedparser.parse(source['url'])
         
+        if not feed.entries:
+            logger.warning(f"No entries found in RSS feed: {source['name']}")
+            return []
+        
         articles = []
         for entry in feed.entries:
+            # Get published date
+            published_date = entry.get('published', entry.get('updated', datetime.now().isoformat()))
+            
             articles.append({
                 'source': source['name'],
                 'title': entry.title,
                 'url': entry.link,
-                'published_date': entry.get('published', datetime.now().isoformat()),
+                'published_date': published_date,
                 'content': entry.get('summary', ''),
                 'raw_html': entry.get('summary', '')
             })
@@ -154,28 +157,36 @@ async def scrape_news_sources():
     """Scrape all configured news sources"""
     all_articles = []
     
+    # Process RSS sources first (more reliable)
+    rss_tasks = []
+    for source in NEWS_SOURCES:
+        if source['type'] == 'rss':
+            rss_tasks.append(scrape_rss_source(source))
+    
+    if rss_tasks:
+        logger.info(f"Processing {len(rss_tasks)} RSS sources...")
+        rss_results = await asyncio.gather(*rss_tasks, return_exceptions=True)
+        for result in rss_results:
+            if isinstance(result, list):
+                all_articles.extend(result)
+            else:
+                logger.error(f"RSS task failed: {result}")
+    
+    # Process web sources
     async with aiohttp.ClientSession() as session:
         web_tasks = []
-        rss_tasks = []
-        
-        # Create tasks for each source
         for source in NEWS_SOURCES:
             if source['type'] == 'web':
                 web_tasks.append(scrape_web_source(session, source))
-            elif source['type'] == 'rss':
-                rss_tasks.append(scrape_rss_source(source))
         
-        # Gather web scraping results
         if web_tasks:
-            web_results = await asyncio.gather(*web_tasks)
+            logger.info(f"Processing {len(web_tasks)} web sources...")
+            web_results = await asyncio.gather(*web_tasks, return_exceptions=True)
             for result in web_results:
-                all_articles.extend(result)
-        
-        # Gather RSS results
-        if rss_tasks:
-            rss_results = await asyncio.gather(*rss_tasks)
-            for result in rss_results:
-                all_articles.extend(result)
+                if isinstance(result, list):
+                    all_articles.extend(result)
+                else:
+                    logger.error(f"Web task failed: {result}")
     
     logger.info(f"Total articles scraped: {len(all_articles)}")
     return all_articles
