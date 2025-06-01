@@ -1,57 +1,70 @@
 """
-Keyword configuration for AI Voice News Scraper
+Enhanced keyword configuration for AI Voice News Scraper
 """
 
-# Primary keywords - articles MUST contain at least one of these
+# Core voice AI keywords - articles MUST contain at least one
 PRIMARY_VOICE_AI_KEYWORDS = [
-    'voice ai', 'text-to-speech', 'tts', 'speech synthesis',
-    'voice synthesis', 'voice model', 'voice generation',
-    'voice assistant', 'voice clone', 'voice cloning',
-    'synthetic voice', 'ai voice', 'neural voice'
+    # Direct voice AI terms
+    'voice ai', 'ai voice', 'voice artificial intelligence',
+    'text-to-speech', 'tts', 'speech synthesis', 'voice synthesis',
+    'voice generation', 'voice model', 'neural voice',
+    'voice cloning', 'voice clone', 'synthetic voice',
+    
+    # Voice assistant terms
+    'voice assistant', 'voice bot', 'conversational ai',
+    'voice interface', 'voice api', 'voice sdk',
+    
+    # Audio generation
+    'audio generation', 'speech generation', 'voice streaming',
+    'real-time voice', 'voice conversion', 'voice transformer'
 ]
 
-# Secondary keywords - help with context and relevance
-SECONDARY_KEYWORDS = [
-    'audio generation', 'speech generation', 'voice conversion',
-    'voice transformer', 'speech-to-speech', 'voice streaming',
-    'voice api', 'conversational ai', 'voice chat', 'voice bot'
+# Company-specific voice AI keywords
+COMPANY_VOICE_KEYWORDS = [
+    'elevenlabs', 'eleven labs', 'openai voice', 'openai whisper',
+    'google voice', 'google speech', 'amazon polly', 'azure speech',
+    'microsoft speech', 'anthropic voice', 'meta voice',
+    'nvidia voice', 'adobe voice', 'murf', 'speechify',
+    'resemble ai', 'descript', 'wellsaid', 'lovo'
 ]
 
-# Company-specific keywords
-COMPANY_KEYWORDS = [
-    'elevenlabs', 'openai voice', 'google voice', 'amazon alexa',
-    'microsoft cortana', 'apple siri', 'anthropic voice',
-    'meta voice', 'nvidia voice', 'adobe voice'
-]
-
-# Technical terms
-TECHNICAL_KEYWORDS = [
+# Technical voice AI terms
+TECHNICAL_VOICE_KEYWORDS = [
     'vocoder', 'neural vocoder', 'wavenet', 'tacotron',
     'fastspeech', 'melgan', 'hifigan', 'voice encoder',
     'speaker embedding', 'voice embedding', 'prosody',
-    'phoneme', 'mel-spectrogram'
+    'phoneme', 'mel-spectrogram', 'voice dataset',
+    'voice training', 'voice fine-tuning', 'voice model training'
 ]
 
-# Application keywords
-APPLICATION_KEYWORDS = [
-    'voice over', 'audiobook', 'podcast generation',
+# Voice AI applications
+APPLICATION_VOICE_KEYWORDS = [
+    'voice over', 'voiceover', 'audiobook', 'podcast generation',
     'voice dubbing', 'voice translation', 'multilingual voice',
-    'voice accessibility', 'voice interface', 'voice commerce',
-    'voice search', 'voice control'
+    'voice accessibility', 'voice commerce', 'voice search',
+    'voice control', 'voice narration', 'voice acting',
+    'voice personalization', 'custom voice', 'brand voice'
 ]
 
-# Combine all keywords
+# Combine all voice-specific keywords
 ALL_VOICE_AI_KEYWORDS = (
     PRIMARY_VOICE_AI_KEYWORDS + 
-    SECONDARY_KEYWORDS + 
-    COMPANY_KEYWORDS + 
-    TECHNICAL_KEYWORDS + 
-    APPLICATION_KEYWORDS
+    COMPANY_VOICE_KEYWORDS + 
+    TECHNICAL_VOICE_KEYWORDS + 
+    APPLICATION_VOICE_KEYWORDS
 )
 
 # Context keywords that help determine relevance
 CONTEXT_KEYWORDS = [
-    'ai', 'artificial intelligence', 'model', 'neural',
-    'deep learning', 'machine learning', 'generative',
-    'algorithm', 'training', 'dataset', 'api', 'sdk'
+    'ai', 'artificial intelligence', 'machine learning', 'deep learning',
+    'neural network', 'model', 'algorithm', 'training', 'dataset',
+    'api', 'sdk', 'platform', 'technology', 'innovation',
+    'startup', 'funding', 'release', 'launch', 'announcement'
+]
+
+# Negative keywords to filter out irrelevant content
+NEGATIVE_KEYWORDS = [
+    'voice actor', 'voice actress', 'singing voice', 'music voice',
+    'voice coach', 'voice lesson', 'voice therapy', 'voice disorder',
+    'voice of america', 'voice vote', 'voice mail', 'voicemail'
 ]
