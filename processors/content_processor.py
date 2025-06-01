@@ -7,10 +7,10 @@ import asyncio
 import aiohttp
 from bs4 import BeautifulSoup
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
 from langchain.chains.summarize import load_summarize_chain
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.docstore.document import Document
 import os
@@ -61,7 +61,6 @@ async def fetch_article_content(url):
         logger.error(f"Error fetching article content: {str(e)}")
         return None
 
-# Update the is_relevant_to_voice_ai function for better filtering:
 def is_relevant_to_voice_ai(text):
     """Check if the content is relevant to voice AI with improved logic"""
     text_lower = text.lower()
