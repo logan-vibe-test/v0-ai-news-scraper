@@ -14,9 +14,9 @@ from storage.db_manager import store_news_item, store_reaction, get_recent_news
 from notifiers.slack_notifier import send_slack_digest
 from notifiers.email_notifier import send_email_digest
 
-# Configure logging
+# Configure logging with more detail
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Changed from INFO to DEBUG
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler("ai_voice_scraper.log"),
@@ -87,11 +87,18 @@ async def generate_digest():
         'reactions': reactions
     }
     
-    # Send notifications
-    await send_slack_digest(digest)
-    await send_email_digest(digest)
+    logger.info(f"Digest contains {len(news_items)} news items and {len(reactions)} reactions")
     
-    logger.info("Daily digest sent successfully")
+    # Send notifications
+    logger.info("Sending Slack digest...")
+    slack_result = await send_slack_digest(digest)
+    logger.info(f"Slack result: {slack_result}")
+    
+    logger.info("Sending email digest...")
+    email_result = await send_email_digest(digest)
+    logger.info(f"Email result: {email_result}")
+    
+    logger.info("Daily digest process completed")
 
 async def main():
     """Main entry point"""

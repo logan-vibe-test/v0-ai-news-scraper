@@ -10,8 +10,9 @@ import feedparser
 
 logger = logging.getLogger(__name__)
 
-# Define news sources
+# Define news sources - customize this list
 NEWS_SOURCES = [
+    # Tech News Sites
     {
         'name': 'TechCrunch',
         'url': 'https://techcrunch.com/category/artificial-intelligence/',
@@ -36,6 +37,8 @@ NEWS_SOURCES = [
         'type': 'web',
         'selector': 'article.article'
     },
+    
+    # Company Blogs
     {
         'name': 'OpenAI Blog',
         'url': 'https://openai.com/blog',
@@ -54,9 +57,30 @@ NEWS_SOURCES = [
         'type': 'web',
         'selector': 'div.blog-post'
     },
+    
+    # Add more sources here
+    {
+        'name': 'Anthropic Blog',
+        'url': 'https://www.anthropic.com/news',
+        'type': 'web',
+        'selector': 'article'
+    },
+    {
+        'name': 'Microsoft AI Blog',
+        'url': 'https://blogs.microsoft.com/ai/',
+        'type': 'web',
+        'selector': 'article'
+    },
+    
+    # RSS Feeds
     {
         'name': 'Hacker News',
         'url': 'https://news.ycombinator.com/rss',
+        'type': 'rss'
+    },
+    {
+        'name': 'AI News RSS',
+        'url': 'https://artificialintelligence-news.com/feed/',
         'type': 'rss'
     }
 ]

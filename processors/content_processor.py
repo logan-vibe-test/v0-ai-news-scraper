@@ -16,6 +16,9 @@ from langchain.docstore.document import Document
 import os
 from dotenv import load_dotenv
 
+# Add this import at the top
+from config.keywords import ALL_VOICE_AI_KEYWORDS, PRIMARY_VOICE_AI_KEYWORDS, CONTEXT_KEYWORDS
+
 # Load environment variables
 load_dotenv()
 
@@ -24,15 +27,8 @@ logger = logging.getLogger(__name__)
 # OpenAI API key
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
-# Keywords for relevance filtering
-VOICE_AI_KEYWORDS = [
-    'voice ai', 'text-to-speech', 'tts', 'speech synthesis', 
-    'voice synthesis', 'voice model', 'voice generation',
-    'elevenlabs', 'openai voice', 'audio generation',
-    'voice assistant', 'voice clone', 'voice cloning',
-    'synthetic voice', 'ai voice', 'voice transformer',
-    'speech-to-speech', 'voice conversion'
-]
+# Replace the existing VOICE_AI_KEYWORDS with:
+VOICE_AI_KEYWORDS = ALL_VOICE_AI_KEYWORDS
 
 async def fetch_article_content(url):
     """Fetch the full content of an article"""
@@ -65,27 +61,31 @@ async def fetch_article_content(url):
         logger.error(f"Error fetching article content: {str(e)}")
         return None
 
+# Update the is_relevant_to_voice_ai function for better filtering:
 def is_relevant_to_voice_ai(text):
-    """Check if the content is relevant to voice AI"""
+    """Check if the content is relevant to voice AI with improved logic"""
     text_lower = text.lower()
     
-    # Check for keyword matches
-    keyword_matches = sum(1 for keyword in VOICE_AI_KEYWORDS if keyword in text_lower)
+    # Check for primary keyword matches (must have at least one)
+    primary_matches = sum(1 for keyword in PRIMARY_VOICE_AI_KEYWORDS if keyword in text_lower)
     
-    # If we have multiple keyword matches, it's likely relevant
-    if keyword_matches >= 2:
+    if primary_matches == 0:
+        return False  # No primary voice AI keywords found
+    
+    # If we have primary matches, check for additional context
+    all_keyword_matches = sum(1 for keyword in VOICE_AI_KEYWORDS if keyword in text_lower)
+    context_matches = sum(1 for keyword in CONTEXT_KEYWORDS if keyword in text_lower)
+    
+    # Strong relevance: multiple voice AI keywords OR voice AI + context
+    if all_keyword_matches >= 2 or (primary_matches >= 1 and context_matches >= 1):
         return True
     
-    # For a single match, check for context
-    if keyword_matches == 1:
-        # Look for sentences containing the keywords
+    # For single primary match, look for context in the same sentence
+    if primary_matches == 1:
         sentences = re.split(r'[.!?]+', text_lower)
         for sentence in sentences:
-            if any(keyword in sentence for keyword in VOICE_AI_KEYWORDS):
-                # Check for additional context in the same sentence
-                context_keywords = ['ai', 'artificial intelligence', 'model', 'neural', 
-                                   'deep learning', 'machine learning', 'generative']
-                if any(context in sentence for context in context_keywords):
+            if any(keyword in sentence for keyword in PRIMARY_VOICE_AI_KEYWORDS):
+                if any(context in sentence for context in CONTEXT_KEYWORDS):
                     return True
     
     return False
