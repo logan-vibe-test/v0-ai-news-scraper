@@ -1,5 +1,5 @@
 """
-Email notifier for AI Voice News Scraper - Enhanced with executive summary
+Email notifier for AI Voice News Scraper - Enhanced with trends analysis
 """
 import logging
 import os
@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 import jinja2
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
+from processors.trends_analyzer import analyze_current_trends
+from storage.db_manager import store_run_summary
 
 # Load environment variables
 load_dotenv()
@@ -130,13 +132,46 @@ def select_top_articles(news_items, limit=5):
     # Return top articles
     return sorted_items[:limit]
 
+def calculate_sentiment_summary(reactions):
+    """Calculate sentiment summary from reactions"""
+    sentiment_counts = {'positive': 0, 'negative': 0, 'neutral': 0}
+    subreddit_activity = {}
+    
+    for reaction in reactions:
+        sentiment = reaction.get('sentiment', 'neutral')
+        sentiment_counts[sentiment] += 1
+        
+        subreddit = reaction.get('subreddit', 'unknown')
+        subreddit_activity[subreddit] = subreddit_activity.get(subreddit, 0) + 1
+    
+    return sentiment_counts, subreddit_activity
+
 async def send_email_digest(digest):
-    """Send a digest via email with executive summary"""
+    """Send a digest via email with executive summary and trends analysis"""
     if not all([SMTP_SERVER, SMTP_USERNAME, SMTP_PASSWORD, EMAIL_FROM, EMAIL_TO]):
         logger.error("Email configuration not complete")
         return False
     
     try:
+        # Calculate sentiment summary for trends
+        sentiment_summary, subreddit_activity = calculate_sentiment_summary(digest.get('reactions', []))
+        
+        # Prepare run data for trends analysis
+        current_run_data = {
+            'articles_found': len(digest.get('news_items', [])),
+            'articles_processed': len(digest.get('news_items', [])),
+            'reddit_posts': len(digest.get('reactions', [])),
+            'sentiment_summary': sentiment_summary,
+            'subreddit_activity': subreddit_activity
+        }
+        
+        # Analyze trends
+        logger.info("Analyzing trends from recent runs...")
+        trends_data = await analyze_current_trends(current_run_data)
+        
+        # Store this run's summary for future trend analysis
+        await store_run_summary(current_run_data)
+        
         # Generate executive summary
         logger.info("Generating executive summary...")
         executive_summary = await generate_executive_summary(
@@ -153,7 +188,8 @@ async def send_email_digest(digest):
             'executive_summary': executive_summary,
             'top_articles': top_articles,
             'total_articles_found': len(digest['news_items']),
-            'total_reddit_posts': len(digest.get('reactions', []))
+            'total_reddit_posts': len(digest.get('reactions', [])),
+            'trends': trends_data
         }
         
         # Create message
@@ -174,7 +210,7 @@ async def send_email_digest(digest):
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
             server.send_message(msg)
         
-        logger.info(f"Sent enhanced email digest to {EMAIL_TO}")
+        logger.info(f"Sent enhanced email digest with trends to {EMAIL_TO}")
         return True
     except Exception as e:
         logger.error(f"Error sending email digest: {str(e)}")
@@ -186,7 +222,7 @@ def format_digest_for_email(digest):
         # Try to load the template
         template = template_env.get_template('email_digest.html')
     except jinja2.exceptions.TemplateNotFound:
-        # If template doesn't exist, use an enhanced inline template
+        # If template doesn't exist, use an enhanced inline template with trends
         template_str = """
         <!DOCTYPE html>
         <html>
@@ -215,11 +251,19 @@ def format_digest_for_email(digest):
                     border-bottom: 3px solid #3498db;
                     padding-bottom: 10px;
                     margin-bottom: 30px;
+                    text-align: center;
                 }
                 h2 {
                     color: #3498db;
                     margin-top: 30px;
                     margin-bottom: 20px;
+                }
+                h3 {
+                    color: #e74c3c;
+                    margin-top: 25px;
+                    margin-bottom: 15px;
+                    border-left: 4px solid #e74c3c;
+                    padding-left: 15px;
                 }
                 .executive-summary {
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -234,31 +278,79 @@ def format_digest_for_email(digest):
                     margin-top: 0;
                     margin-bottom: 15px;
                 }
-                .stats {
-                    background-color: #ecf0f1;
+                .trends-section {
+                    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                    color: white;
+                    padding: 25px;
+                    border-radius: 10px;
+                    margin-bottom: 30px;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                }
+                .trends-section h2 {
+                    color: white;
+                    margin-top: 0;
+                    margin-bottom: 15px;
+                }
+                .trend-item {
+                    background-color: rgba(255,255,255,0.15);
                     padding: 15px;
                     border-radius: 8px;
-                    margin-bottom: 20px;
+                    margin-bottom: 15px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                .trend-label {
+                    font-weight: bold;
+                }
+                .trend-value {
+                    font-size: 18px;
+                }
+                .insights-list {
+                    list-style: none;
+                    padding: 0;
+                }
+                .insights-list li {
+                    background-color: rgba(255,255,255,0.1);
+                    padding: 10px;
+                    margin-bottom: 8px;
+                    border-radius: 5px;
+                }
+                .stats {
+                    background-color: #ecf0f1;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin-bottom: 30px;
                     text-align: center;
                     display: flex;
                     justify-content: space-around;
                     flex-wrap: wrap;
                 }
                 .stat-item {
-                    margin: 5px;
+                    margin: 10px;
+                    min-width: 120px;
                 }
                 .stat-number {
-                    font-size: 24px;
+                    font-size: 28px;
                     font-weight: bold;
                     color: #3498db;
+                    display: block;
+                }
+                .stat-label {
+                    font-size: 14px;
+                    color: #7f8c8d;
+                    margin-top: 5px;
                 }
                 .news-item {
                     margin-bottom: 30px;
                     border-left: 4px solid #3498db;
-                    padding-left: 20px;
                     background-color: #f8f9fa;
                     padding: 20px;
                     border-radius: 0 8px 8px 0;
+                    transition: transform 0.2s ease;
+                }
+                .news-item:hover {
+                    transform: translateX(5px);
                 }
                 .news-title {
                     font-size: 18px;
@@ -276,27 +368,95 @@ def format_digest_for_email(digest):
                     font-size: 14px;
                     color: #7f8c8d;
                     margin-bottom: 12px;
+                    font-weight: 500;
                 }
                 .news-summary {
                     font-size: 16px;
                     line-height: 1.6;
                 }
                 .reddit-section {
-                    background-color: #ff4500;
+                    background: linear-gradient(135deg, #ff4500 0%, #ff6b35 100%);
                     color: white;
-                    padding: 20px;
-                    border-radius: 8px;
+                    padding: 25px;
+                    border-radius: 10px;
                     margin-top: 30px;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
                 }
                 .reddit-section h2 {
                     color: white;
                     margin-top: 0;
+                    margin-bottom: 20px;
+                }
+                .reddit-subreddit {
+                    margin-bottom: 25px;
+                }
+                .reddit-subreddit h3 {
+                    color: white;
+                    border-left: 4px solid rgba(255,255,255,0.5);
+                    margin-bottom: 15px;
+                    font-size: 18px;
                 }
                 .reddit-post {
-                    background-color: rgba(255,255,255,0.1);
+                    background-color: rgba(255,255,255,0.15);
                     padding: 15px;
-                    border-radius: 5px;
+                    border-radius: 8px;
                     margin-bottom: 15px;
+                    border-left: 3px solid rgba(255,255,255,0.3);
+                }
+                .reddit-post:last-child {
+                    margin-bottom: 0;
+                }
+                .reddit-post.positive {
+                    border-left-color: #2ecc71;
+                    background-color: rgba(46, 204, 113, 0.1);
+                }
+                .reddit-post.negative {
+                    border-left-color: #e74c3c;
+                    background-color: rgba(231, 76, 60, 0.1);
+                }
+                .reddit-post.neutral {
+                    border-left-color: #95a5a6;
+                    background-color: rgba(149, 165, 166, 0.1);
+                }
+                .reddit-meta {
+                    font-size: 14px;
+                    opacity: 0.9;
+                    margin-bottom: 8px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                .sentiment-indicator {
+                    font-size: 16px;
+                    font-weight: bold;
+                    padding: 4px 8px;
+                    border-radius: 12px;
+                    background-color: rgba(255,255,255,0.2);
+                }
+                .reddit-title {
+                    font-weight: 500;
+                    margin-bottom: 8px;
+                }
+                .reddit-title a {
+                    color: white;
+                    text-decoration: none;
+                }
+                .reddit-title a:hover {
+                    text-decoration: underline;
+                }
+                .reddit-summary {
+                    font-size: 14px;
+                    opacity: 0.9;
+                    font-style: italic;
+                    margin-bottom: 8px;
+                }
+                .reddit-links {
+                    font-size: 12px;
+                    opacity: 0.8;
+                }
+                .reddit-links a {
+                    color: white;
+                    margin-right: 10px;
                 }
                 .footer {
                     margin-top: 40px;
@@ -310,6 +470,20 @@ def format_digest_for_email(digest):
                     font-size: 24px;
                     margin-right: 10px;
                 }
+                .highlight {
+                    background-color: #fff3cd;
+                    padding: 15px;
+                    border-radius: 5px;
+                    border-left: 4px solid #ffc107;
+                    margin-bottom: 20px;
+                }
+                .sentiment-summary {
+                    background-color: rgba(255,255,255,0.2);
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin-bottom: 15px;
+                    font-size: 14px;
+                }
             </style>
         </head>
         <body>
@@ -318,29 +492,64 @@ def format_digest_for_email(digest):
                 
                 <div class="stats">
                     <div class="stat-item">
-                        <div class="stat-number">{{ total_articles_found }}</div>
-                        <div>Articles Found</div>
+                        <span class="stat-number">{{ total_articles_found or news_items|length }}</span>
+                        <div class="stat-label">Articles Found</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-number">{{ top_articles|length }}</div>
-                        <div>Top Articles</div>
+                        <span class="stat-number">{{ top_articles|length or news_items|length }}</span>
+                        <div class="stat-label">Top Articles</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-number">{{ total_reddit_posts }}</div>
-                        <div>Reddit Posts</div>
+                        <span class="stat-number">{{ total_reddit_posts or reactions|length }}</span>
+                        <div class="stat-label">Reddit Posts</div>
                     </div>
                 </div>
+                
+                {% if trends and trends.available %}
+                <div class="trends-section">
+                    <h2>📊 Trends Analysis (Last {{ trends.runs_analyzed }} Runs)</h2>
+                    <p><strong>Period:</strong> {{ trends.date_range }}</p>
+                    
+                    <div class="trend-item">
+                        <span class="trend-label">Community Sentiment</span>
+                        <span class="trend-value">{{ trends.sentiment.emoji }} {{ trends.sentiment.trend.title() }}</span>
+                    </div>
+                    
+                    <div class="trend-item">
+                        <span class="trend-label">Discussion Activity</span>
+                        <span class="trend-value">{{ trends.activity.emoji }} {{ trends.activity.trend.title() }}</span>
+                    </div>
+                    
+                    <div class="trend-item">
+                        <span class="trend-label">News Volume</span>
+                        <span class="trend-value">{{ trends.news_volume.emoji }} {{ trends.news_volume.trend.title() }}</span>
+                    </div>
+                    
+                    {% if trends.insights %}
+                    <h3 style="color: white; border-left-color: white;">Key Insights</h3>
+                    <ul class="insights-list">
+                        {% for insight in trends.insights %}
+                        <li>{{ insight }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
+                {% endif %}
                 
                 {% if executive_summary %}
                 <div class="executive-summary">
                     <h2>📊 Executive Summary</h2>
-                    <p>{{ executive_summary|replace('\n', '</p><p>')|safe }}</p>
+                    {% for paragraph in executive_summary.split('\n\n') %}
+                        {% if paragraph.strip() %}
+                        <p>{{ paragraph.strip() }}</p>
+                        {% endif %}
+                    {% endfor %}
                 </div>
                 {% endif %}
                 
-                {% if top_articles %}
-                    <h2>🏆 Top 5 Voice AI Articles</h2>
-                    {% for item in top_articles %}
+                {% if top_articles or news_items %}
+                    <h2>🏆 Top {{ (top_articles or news_items)|length }} Voice AI Articles</h2>
+                    {% for item in (top_articles or news_items) %}
                     <div class="news-item">
                         <div class="news-title">
                             <a href="{{ item.url }}" target="_blank">{{ item.title }}</a>
@@ -353,6 +562,13 @@ def format_digest_for_email(digest):
                         </div>
                     </div>
                     {% endfor %}
+                    
+                    {% if total_articles_found and total_articles_found > (top_articles or news_items)|length %}
+                    <div class="highlight">
+                        <strong>📈 Additional Coverage:</strong> Found {{ total_articles_found }} total articles today. 
+                        Showing the top {{ (top_articles or news_items)|length }} most relevant to voice AI technology.
+                    </div>
+                    {% endif %}
                 {% else %}
                     <div class="news-item">
                         <p>No voice AI news found today. The scraper will continue monitoring for updates.</p>
@@ -361,23 +577,62 @@ def format_digest_for_email(digest):
                 
                 {% if reactions %}
                 <div class="reddit-section">
-                    <h2>💬 Community Discussions (Top 5)</h2>
-                    {% for reaction in reactions[:5] %}
-                    <div class="reddit-post">
-                        <strong>r/{{ reaction.subreddit }}</strong> • {{ reaction.score }} points<br>
-                        <a href="{{ reaction.url }}" target="_blank" style="color: white;">
-                            {{ reaction.title or reaction.content[:100] }}...
-                        </a>
+                    <h2>💬 Top Reddit Discussions with Sentiment Analysis</h2>
+                    
+                    {% set sentiment_counts = {'positive': 0, 'negative': 0, 'neutral': 0} %}
+                    {% for reaction in reactions %}
+                        {% if sentiment_counts.update({reaction.sentiment: sentiment_counts[reaction.sentiment] + 1}) %}{% endif %}
+                    {% endfor %}
+                    
+                    <div class="sentiment-summary">
+                        <strong>Overall Community Sentiment:</strong> 
+                        😊 {{ sentiment_counts.positive }} Positive | 
+                        😟 {{ sentiment_counts.negative }} Negative | 
+                        😐 {{ sentiment_counts.neutral }} Neutral
                     </div>
+                    
+                    {% set current_subreddit = '' %}
+                    {% for reaction in reactions %}
+                        {% if reaction.subreddit != current_subreddit %}
+                            {% if current_subreddit != '' %}</div>{% endif %}
+                            {% set current_subreddit = reaction.subreddit %}
+                            <div class="reddit-subreddit">
+                                <h3>r/{{ reaction.subreddit }}</h3>
+                        {% endif %}
+                        
+                        <div class="reddit-post {{ reaction.sentiment }}">
+                            <div class="reddit-meta">
+                                <span>
+                                    <strong>{{ reaction.score }} upvotes</strong> • {{ reaction.num_comments }} comments • {{ reaction.created_date }}
+                                </span>
+                                <span class="sentiment-indicator">
+                                    {{ reaction.sentiment_emoji }} {{ reaction.sentiment.title() }}
+                                </span>
+                            </div>
+                            <div class="reddit-title">
+                                <a href="{{ reaction.url }}" target="_blank">{{ reaction.title }}</a>
+                            </div>
+                            <div class="reddit-summary">
+                                "{{ reaction.summary }}"
+                            </div>
+                            <div class="reddit-links">
+                                <a href="{{ reaction.url }}" target="_blank">💬 Discussion</a>
+                                {% if reaction.external_url %}
+                                <a href="{{ reaction.external_url }}" target="_blank">🌐 External Link</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        {% if loop.last %}</div>{% endif %}
                     {% endfor %}
                 </div>
                 {% endif %}
                 
                 <div class="footer">
-                    <p>Generated by AI Voice News Scraper on {{ date }}</p>
-                    <p>This digest focuses specifically on voice AI technology news and community insights.</p>
-                    {% if total_articles_found > 5 %}
-                    <p><em>Showing top 5 of {{ total_articles_found }} articles found today.</em></p>
+                    <p><strong>Generated by AI Voice News Scraper</strong> on {{ date }}</p>
+                    <p>This digest includes trend analysis, top discussions from Reddit communities with AI-powered sentiment analysis.</p>
+                    {% if trends and trends.available %}
+                    <p><em>Trends based on analysis of the last {{ trends.runs_analyzed }} runs.</em></p>
                     {% endif %}
                 </div>
             </div>
@@ -403,5 +658,6 @@ def format_digest_for_email(digest):
         reactions_by_platform=reactions_by_platform,
         executive_summary=digest.get('executive_summary', ''),
         total_articles_found=digest.get('total_articles_found', 0),
-        total_reddit_posts=digest.get('total_reddit_posts', 0)
+        total_reddit_posts=digest.get('total_reddit_posts', 0),
+        trends=digest.get('trends', {})
     )

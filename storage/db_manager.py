@@ -1,5 +1,5 @@
 """
-Database manager for AI Voice News Scraper - Fixed syntax error
+Database manager for AI Voice News Scraper - Enhanced with trends tracking
 """
 import logging
 import os
@@ -29,6 +29,7 @@ try:
     # Collections
     news_collection = db['news_items']
     reactions_collection = db['reactions']
+    runs_collection = db['runs']  # New collection for tracking runs
     logger.info("MongoDB client initialized")
 except Exception as e:
     logger.warning(f"MongoDB not available, using file storage: {str(e)}")
@@ -37,6 +38,7 @@ except Exception as e:
     db = None
     news_collection = None
     reactions_collection = None
+    runs_collection = None
 
 # Create data directory for file storage
 Path('data').mkdir(exist_ok=True)
@@ -183,6 +185,74 @@ async def store_reaction(reaction):
     except Exception as e:
         logger.error(f"Error storing reaction: {str(e)}")
         return None
+
+async def store_run_summary(run_data):
+    """Store a summary of this run for trend analysis"""
+    try:
+        run_summary = {
+            '_id': str(uuid.uuid4()),
+            'timestamp': datetime.now().isoformat(),
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'articles_found': run_data.get('articles_found', 0),
+            'articles_processed': run_data.get('articles_processed', 0),
+            'reddit_posts': run_data.get('reddit_posts', 0),
+            'sentiment_summary': run_data.get('sentiment_summary', {}),
+            'top_keywords': run_data.get('top_keywords', []),
+            'subreddit_activity': run_data.get('subreddit_activity', {})
+        }
+        
+        # Check if we should use file storage
+        use_files = USE_FILE_STORAGE or not await test_mongodb_connection()
+        
+        if use_files:
+            # Use file storage
+            runs = load_file_data('runs')
+            runs.append(run_summary)
+            
+            # Keep only last 10 runs
+            runs = runs[-10:]
+            save_file_data('runs', runs)
+            logger.info(f"Stored run summary for {run_summary['date']}")
+            return run_summary['_id']
+        else:
+            # Use MongoDB
+            result = await runs_collection.insert_one(run_summary)
+            
+            # Clean up old runs (keep last 10)
+            old_runs = await runs_collection.find().sort('timestamp', -1).skip(10).to_list(None)
+            if old_runs:
+                old_ids = [run['_id'] for run in old_runs]
+                await runs_collection.delete_many({'_id': {'$in': old_ids}})
+            
+            logger.info(f"Stored run summary for {run_summary['date']}")
+            return result.inserted_id
+    except Exception as e:
+        logger.error(f"Error storing run summary: {str(e)}")
+        return None
+
+async def get_recent_runs(limit=3):
+    """Get the last N runs for trend analysis"""
+    try:
+        # Check if we should use file storage
+        use_files = USE_FILE_STORAGE or not await test_mongodb_connection()
+        
+        if use_files:
+            # Use file storage
+            runs = load_file_data('runs')
+            # Sort by timestamp descending and take the last N
+            runs.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+            recent_runs = runs[:limit]
+            logger.info(f"Retrieved {len(recent_runs)} recent runs from file")
+            return recent_runs
+        else:
+            # Use MongoDB
+            cursor = runs_collection.find().sort('timestamp', -1).limit(limit)
+            runs = await cursor.to_list(length=limit)
+            logger.info(f"Retrieved {len(runs)} recent runs from MongoDB")
+            return runs
+    except Exception as e:
+        logger.error(f"Error retrieving recent runs: {str(e)}")
+        return []
 
 async def get_recent_news(days=1):
     """Get recent news items from the database or file"""

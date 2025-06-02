@@ -30,9 +30,11 @@ def setup_logging(log_level=None):
 from ai_voice_scraper.scrapers.news_scraper import scrape_news_sources
 from ai_voice_scraper.scrapers.reddit_scraper import scrape_reddit
 from ai_voice_scraper.processors.content_processor import process_content
-from ai_voice_scraper.storage.db_manager import store_news_item, store_reaction
+from ai_voice_scraper.storage.db_manager import store_news_item
 from ai_voice_scraper.notifiers.slack_notifier import send_slack_digest
 from ai_voice_scraper.notifiers.email_notifier import send_email_digest
+from ai_voice_scraper.processors.trends_analyzer import analyze_current_trends
+from ai_voice_scraper.storage.db_manager import store_run_summary, store_reaction
 
 async def run_pipeline(logger):
     """Run the main pipeline"""
@@ -68,6 +70,29 @@ async def run_pipeline(logger):
             logger.info(f"Found {len(reactions)} Reddit posts about AI voice")
         except Exception as e:
             logger.error(f"Reddit scraping failed: {e}")
+    
+    # Calculate sentiment summary for trends
+    sentiment_counts = {'positive': 0, 'negative': 0, 'neutral': 0}
+    subreddit_activity = {}
+
+    for reaction in reactions:
+        sentiment = reaction.get('sentiment', 'neutral')
+        sentiment_counts[sentiment] += 1
+        
+        subreddit = reaction.get('subreddit', 'unknown')
+        subreddit_activity[subreddit] = subreddit_activity.get(subreddit, 0) + 1
+
+    # Prepare run data for trends analysis
+    current_run_data = {
+        'articles_found': len(news_items),
+        'articles_processed': len(processed_items),
+        'reddit_posts': len(reactions),
+        'sentiment_summary': sentiment_counts,
+        'subreddit_activity': subreddit_activity
+    }
+
+    # Store this run's summary for future trend analysis
+    await store_run_summary(current_run_data)
     
     # Step 4: Send notifications
     if processed_items or reactions:
