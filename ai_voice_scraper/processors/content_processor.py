@@ -6,38 +6,29 @@ import re
 import asyncio
 import aiohttp
 from bs4 import BeautifulSoup
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain.chains.summarize import load_summarize_chain
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import PromptTemplate
+from langchain_core.documents import Document
 import ssl
 import certifi
-import random
-from datetime import datetime
 
 from ai_voice_scraper.config import OPENAI_API_KEY
 from ai_voice_scraper.config.keywords import PRIMARY_VOICE_AI_KEYWORDS, ALL_VOICE_AI_KEYWORDS, CONTEXT_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
-# User agents to rotate
-USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0'
-]
-
 async def fetch_article_content(url):
     """Fetch the full content of an article"""
     try:
         ssl_context = ssl.create_default_context(cafile=certifi.where())
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_OPTIONAL
-        
-        connector = aiohttp.TCPConnector(ssl=ssl_context, verify_ssl=False)
-        
-        # Use random user agent
-        headers = {'User-Agent': random.choice(USER_AGENTS)}
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
         
         async with aiohttp.ClientSession(connector=connector) as session:
-            async with session.get(url, timeout=15, headers=headers) as response:
+            async with session.get(url, timeout=10) as response:
                 if response.status != 200:
                     logger.error(f"Error fetching article: {response.status}")
                     return None
@@ -65,111 +56,111 @@ async def fetch_article_content(url):
         return None
 
 def is_relevant_to_voice_ai(text):
-    """Check if the content is relevant to voice AI with LESS restrictive logic"""
-    if not text:
-        return False
-        
+    """Check if the content is relevant to voice AI with improved logic"""
     text_lower = text.lower()
     
     # Check for primary keyword matches (must have at least one)
-    primary_matches = [kw for kw in PRIMARY_VOICE_AI_KEYWORDS if kw in text_lower]
+    primary_matches = sum(1 for keyword in PRIMARY_VOICE_AI_KEYWORDS if keyword in text_lower)
     
-    # If we have ANY primary match, consider it relevant
-    if primary_matches:
-        logger.info(f"Found primary voice AI keywords: {', '.join(primary_matches[:3])}")
+    if primary_matches == 0:
+        return False  # No primary voice AI keywords found
+    
+    # If we have primary matches, check for additional context
+    all_keyword_matches = sum(1 for keyword in ALL_VOICE_AI_KEYWORDS if keyword in text_lower)
+    context_matches = sum(1 for keyword in CONTEXT_KEYWORDS if keyword in text_lower)
+    
+    # Strong relevance: multiple voice AI keywords OR voice AI + context
+    if all_keyword_matches >= 2 or (primary_matches >= 1 and context_matches >= 1):
         return True
     
-    # Check for multiple secondary matches
-    all_keyword_matches = [kw for kw in ALL_VOICE_AI_KEYWORDS if kw in text_lower]
+    # For single primary match, look for context in the same sentence
+    if primary_matches == 1:
+        sentences = re.split(r'[.!?]+', text_lower)
+        for sentence in sentences:
+            if any(keyword in sentence for keyword in PRIMARY_VOICE_AI_KEYWORDS):
+                if any(context in sentence for context in CONTEXT_KEYWORDS):
+                    return True
     
-    # If we have multiple secondary matches, consider it relevant
-    if len(all_keyword_matches) >= 2:
-        logger.info(f"Found multiple voice AI keywords: {', '.join(all_keyword_matches[:3])}")
-        return True
-    
-    # Not relevant
     return False
 
-async def simple_summarize(content, title):
-    """Simple text summarization without OpenAI"""
-    if not content:
-        return "No content available for summary"
+async def summarize_content(content, title):
+    """Summarize the article content using LangChain and OpenAI"""
+    if not OPENAI_API_KEY:
+        logger.error("OpenAI API key not configured")
+        return "Summary not available (API key not configured)"
     
-    # Clean the text
-    content = content.replace('\n', ' ').replace('\r', ' ')
-    
-    # Split into sentences
-    sentences = []
-    for delimiter in ['. ', '! ', '? ']:
-        content = content.replace(delimiter, '|||SPLIT|||')
-    
-    potential_sentences = content.split('|||SPLIT|||')
-    for sentence in potential_sentences:
-        sentence = sentence.strip()
-        if len(sentence) > 10:  # Only keep meaningful sentences
-            sentences.append(sentence)
-    
-    if not sentences:
-        return "No meaningful content found for summarization"
-    
-    # Build summary
-    summary = title + ". "
-    
-    # Add first 3 sentences or up to 500 chars
-    for sentence in sentences[:3]:
-        if len(summary + sentence) <= 500:
-            summary += sentence + ". "
-        else:
-            break
-    
-    return summary.strip()
+    try:
+        # Split text into chunks
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=2000,
+            chunk_overlap=200
+        )
+        texts = text_splitter.split_text(content)
+        
+        # Create documents
+        docs = [Document(page_content=t) for t in texts]
+        
+        # Initialize the LLM
+        llm = ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo")
+        
+        # Create the summarization chain
+        prompt_template = """
+        You are an AI assistant that summarizes news articles about voice AI technology.
+        
+        Write a concise summary of the following article about voice AI technology:
+        
+        {text}
+        
+        The article title is: {title}
+        
+        Focus on the key points related to voice AI technology, including:
+        - New features or capabilities
+        - Technical improvements
+        - Company announcements
+        - Potential applications
+        
+        SUMMARY:
+        """
+        
+        prompt = PromptTemplate(
+            template=prompt_template,
+            input_variables=["text", "title"]
+        )
+        
+        chain = load_summarize_chain(
+            llm,
+            chain_type="stuff",
+            prompt=prompt
+        )
+        
+        # Run the chain
+        summary = chain.run({"input_documents": docs, "title": title})
+        return summary.strip()
+    except Exception as e:
+        logger.error(f"Error summarizing content: {str(e)}")
+        return "Error generating summary"
 
 async def process_content(news_item):
     """Process a news item: fetch content, check relevance, summarize"""
     logger.info(f"Processing: {news_item['title']}")
     
-    # Check if the title itself contains voice AI keywords
-    title_relevant = is_relevant_to_voice_ai(news_item['title'])
-    if title_relevant:
-        logger.info(f"Title is relevant to voice AI: {news_item['title']}")
-        # If title is relevant, we can skip content fetching if needed
-        if 'content' not in news_item or not news_item['content']:
-            # Fetch the full article content
-            content = await fetch_article_content(news_item['url'])
-            if content:
-                news_item['content'] = content
-            else:
-                # Even if we can't fetch content, the title is relevant so proceed
-                news_item['content'] = news_item['title']
-        
-        # Generate a simple summary
-        summary = await simple_summarize(news_item.get('content', ''), news_item['title'])
-        news_item['summary'] = summary
-        
-        logger.info(f"Processed article (title match): {news_item['title']}")
-        return news_item
+    # Fetch the full article content
+    content = await fetch_article_content(news_item['url'])
+    if not content:
+        logger.warning(f"Could not fetch content for {news_item['url']}")
+        return None
     
-    # If title isn't relevant, check the content
-    if 'content' in news_item and news_item['content']:
-        content = news_item['content']
-    else:
-        # Fetch the full article content
-        content = await fetch_article_content(news_item['url'])
-        if not content:
-            logger.warning(f"Could not fetch content for {news_item['url']}")
-            return None
-        
-        # Store the content
-        news_item['content'] = content
+    # Store the content
+    news_item['content'] = content
     
     # Check if the content is relevant to voice AI
     if not is_relevant_to_voice_ai(content):
         logger.info(f"Article not relevant to voice AI: {news_item['title']}")
         return None
     
-    # Generate a simple summary
-    summary = await simple_summarize(content, news_item['title'])
+    # Summarize the content
+    summary = await summarize_content(content, news_item['title'])
     news_item['summary'] = summary
     
-    logger.info(f"Processed article (content match): {news_item['title']}")
+    logger.info(f"Processed article: {news_item['title']}")
     return news_item

@@ -3,15 +3,13 @@ News scraper module for AI Voice News Scraper
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 import aiohttp
 from bs4 import BeautifulSoup
 import feedparser
 import ssl
 import certifi
 import urllib3
-import re
-import random
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +44,7 @@ NEWS_SOURCES = [
     },
     {
         'name': 'TechCrunch AI RSS',
-        'url': 'https://techcrunch.com/category/artificial-intelligence/feed/',
+        'url': 'https://techcrunch.com/category/artificial_intelligence/feed/',
         'type': 'rss'
     },
     {
@@ -69,37 +67,21 @@ NEWS_SOURCES = [
         'url': 'https://www.wired.com/feed/tag/ai/latest/rss',
         'type': 'rss'
     },
-    # General tech news that might cover voice AI
-    {
-        'name': 'TechRadar',
-        'url': 'https://www.techradar.com/rss',
-        'type': 'rss'
-    },
-    {
-        'name': 'Engadget',
-        'url': 'https://www.engadget.com/rss.xml',
-        'type': 'rss'
-    },
-    {
-        'name': 'CNET',
-        'url': 'https://www.cnet.com/rss/news/',
-        'type': 'rss'
-    },
+    
     # Company blogs (web scraping as backup)
     {
         'name': 'OpenAI Blog',
-        'url': 'https://openai.com/blog',
+        'url': 'https://openai.com/news/',
         'type': 'web',
-        'selector': 'a[href*="/blog/"]'
+        'selector': 'a[href*="/news/"]'
     },
     {
         'name': 'Google AI Blog',
-        'url': 'https://ai.googleblog.com/',
-        'type': 'web',
-        'selector': 'div.post'
+        'url': 'https://ai.googleblog.com/feeds/posts/default',
+        'type': 'rss',  # Changed from web to RSS for more reliability
     },
     {
-        'name': 'Anthropic Blog',
+        'name': 'Anthropic News',
         'url': 'https://www.anthropic.com/news',
         'type': 'web',
         'selector': 'a[href*="/news/"]'
@@ -109,21 +91,7 @@ NEWS_SOURCES = [
         'url': 'https://elevenlabs.io/blog',
         'type': 'web',
         'selector': 'a[href*="/blog/"]'
-    },
-    {
-        'name': 'Resemble AI Blog',
-        'url': 'https://www.resemble.ai/blog/',
-        'type': 'web',
-        'selector': 'article'
     }
-]
-
-# User agents to rotate
-USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0'
 ]
 
 async def scrape_web_source(session, source):
@@ -137,16 +105,7 @@ async def scrape_web_source(session, source):
         if any(domain in source['url'] for domain in ['googleblog.com', 'ai.google']):
             ssl_verify = False
         
-        # Use random user agent
-        headers = {'User-Agent': random.choice(USER_AGENTS)}
-        
-        async with session.get(
-            source['url'], 
-            timeout=15, 
-            ssl=ssl_context, 
-            verify_ssl=ssl_verify,
-            headers=headers
-        ) as response:
+        async with session.get(source['url'], timeout=10, ssl=ssl_context, verify_ssl=ssl_verify) as response:
             if response.status != 200:
                 logger.error(f"Error fetching {source['name']}: {response.status}")
                 return []
@@ -161,17 +120,8 @@ async def scrape_web_source(session, source):
             
             for element in elements:
                 # Extract data based on source-specific selectors
-                title_element = element.find('h1') or element.find('h2') or element.find('h3') or element
-                title = title_element.get_text().strip()
-                
-                # Find link - either the element itself is a link, or it contains a link
-                link = None
-                if element.name == 'a':
-                    link = element.get('href', '')
-                else:
-                    link_element = element.find('a')
-                    if link_element:
-                        link = link_element.get('href', '')
+                title = element.get_text().strip()
+                link = element.get('href', '')
                 
                 # Handle relative URLs
                 if link and link.startswith('/'):
@@ -179,7 +129,7 @@ async def scrape_web_source(session, source):
                     domain = '/'.join(source['url'].split('/')[:3])
                     link = domain + link
                 
-                if title and link and len(title) > 5:  # Less restrictive quality check
+                if title and link and len(title) > 10:  # Basic quality check
                     articles.append({
                         'source': source['name'],
                         'title': title,
@@ -199,13 +149,13 @@ async def scrape_rss_source(source):
     """Scrape an RSS feed source with better error handling"""
     try:
         # Set user agent for feedparser
-        feedparser.USER_AGENT = random.choice(USER_AGENTS)
+        feedparser.USER_AGENT = "AI Voice News Scraper 1.0"
         
         # Disable SSL verification warnings
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         
         # Use a more permissive approach for problematic domains
-        if any(domain in source['url'] for domain in ['googleblog.com', 'ai.google']):
+        if 'googleblog.com' in source['url']:
             feed = feedparser.parse(source['url'], ssl_verify=False)
         else:
             feed = feedparser.parse(source['url'])
@@ -219,30 +169,13 @@ async def scrape_rss_source(source):
             # Get published date
             published_date = entry.get('published', entry.get('updated', datetime.now().isoformat()))
             
-            # Get content
-            content = ''
-            if 'content' in entry:
-                content = entry.content[0].value
-            elif 'summary' in entry:
-                content = entry.summary
-            
-            # Skip entries older than 7 days
-            try:
-                if 'published_parsed' in entry and entry.published_parsed:
-                    pub_date = datetime(*entry.published_parsed[:6])
-                    if datetime.now() - pub_date > timedelta(days=7):
-                        continue
-            except Exception:
-                # If date parsing fails, include the entry anyway
-                pass
-            
             articles.append({
                 'source': source['name'],
                 'title': entry.title,
                 'url': entry.link,
                 'published_date': published_date,
-                'content': content,
-                'raw_html': content
+                'content': entry.get('summary', ''),
+                'raw_html': entry.get('summary', '')
             })
         
         logger.info(f"Scraped {len(articles)} articles from {source['name']} RSS")
@@ -256,7 +189,7 @@ async def scrape_news_sources(test_mode=False):
     all_articles = []
     
     # Limit sources in test mode
-    sources = NEWS_SOURCES[:5] if test_mode else NEWS_SOURCES
+    sources = NEWS_SOURCES[:3] if test_mode else NEWS_SOURCES
     
     # Process RSS sources first (more reliable)
     rss_tasks = []
