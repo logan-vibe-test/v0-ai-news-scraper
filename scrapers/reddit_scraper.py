@@ -268,13 +268,30 @@ class BulletproofRedditScraper:
                 continue
         
         logger.info(f"🎯 Reddit scraping completed: {len(all_posts)} posts found")
-        
-        if not all_posts:
-            logger.info("ℹ️  No voice AI posts found. This could be normal if:")
-            logger.info("   - No recent voice AI discussions")
-            logger.info("   - Keywords need adjustment")
-            logger.info("   - Subreddits are quiet today")
-        
+
+        # Calculate total posts scanned
+        total_scanned = 0
+        for subreddit_name in TARGET_SUBREDDITS:
+            total_scanned += 20  # We scan 20 posts per subreddit
+
+        # Log scanning statistics
+        logger.info(f"📊 Reddit Statistics:")
+        logger.info(f"   Subreddits scanned: {len(TARGET_SUBREDDITS)}")
+        logger.info(f"   Total posts scanned: {total_scanned}")
+        logger.info(f"   Voice AI posts found: {len(all_posts)}")
+        if total_scanned > 0:
+            relevance_rate = (len(all_posts) / total_scanned) * 100
+            logger.info(f"   Relevance rate: {relevance_rate:.1f}%")
+
+        # Add metadata to the results
+        if all_posts:
+            # Add scanning metadata to the first post (hacky but works)
+            all_posts[0]['_metadata'] = {
+                'total_scanned': total_scanned,
+                'subreddits_scanned': len(TARGET_SUBREDDITS),
+                'relevance_rate': (len(all_posts) / total_scanned) * 100 if total_scanned > 0 else 0
+            }
+
         return all_posts
 
 # Create global instance

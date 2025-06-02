@@ -182,14 +182,23 @@ async def send_email_digest(digest):
         # Select top 5 articles
         top_articles = select_top_articles(digest['news_items'], limit=5)
         
-        # Create enhanced digest
+        # Create enhanced digest with detailed statistics
         enhanced_digest = {
             **digest,
             'executive_summary': executive_summary,
             'top_articles': top_articles,
             'total_articles_found': len(digest['news_items']),
-            'total_reddit_posts': len(digest.get('reactions', [])),
-            'trends': trends_data
+            'total_articles_relevant': len([item for item in digest['news_items'] if item.get('summary')]),
+            'total_reddit_posts_scanned': digest.get('total_reddit_scanned', 0),
+            'total_reddit_posts_included': len(digest.get('reactions', [])),
+            'trends': trends_data,
+            'processing_stats': {
+                'articles_found': len(digest['news_items']),
+                'articles_relevant': len([item for item in digest['news_items'] if item.get('summary')]),
+                'reddit_scanned': digest.get('total_reddit_scanned', 0),
+                'reddit_included': len(digest.get('reactions', [])),
+                'relevance_rate': round((len([item for item in digest['news_items'] if item.get('summary')]) / max(len(digest['news_items']), 1)) * 100, 1)
+            }
         }
         
         # Create message
@@ -484,6 +493,36 @@ def format_digest_for_email(digest):
                     margin-bottom: 15px;
                     font-size: 14px;
                 }
+                .processing-summary {
+                    background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin-bottom: 30px;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                }
+                .processing-summary h3 {
+                    color: white;
+                    margin-top: 0;
+                    margin-bottom: 15px;
+                    border-left: 4px solid rgba(255,255,255,0.5);
+                    padding-left: 15px;
+                }
+                .summary-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 15px;
+                }
+                .summary-item {
+                    background-color: rgba(255,255,255,0.15);
+                    padding: 15px;
+                    border-radius: 8px;
+                    border-left: 3px solid rgba(255,255,255,0.5);
+                }
+                .summary-item strong {
+                    color: #fff;
+                    font-size: 18px;
+                }
             </style>
         </head>
         <body>
@@ -492,18 +531,48 @@ def format_digest_for_email(digest):
                 
                 <div class="stats">
                     <div class="stat-item">
-                        <span class="stat-number">{{ total_articles_found or news_items|length }}</span>
+                        <span class="stat-number">{{ total_articles_found or processing_stats.articles_found or news_items|length }}</span>
                         <div class="stat-label">Articles Found</div>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-number">{{ top_articles|length or news_items|length }}</span>
-                        <div class="stat-label">Top Articles</div>
+                        <span class="stat-number">{{ total_articles_relevant or processing_stats.articles_relevant or top_articles|length }}</span>
+                        <div class="stat-label">Relevant Articles</div>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-number">{{ total_reddit_posts or reactions|length }}</span>
-                        <div class="stat-label">Reddit Posts</div>
+                        <span class="stat-number">{{ total_reddit_posts_scanned or processing_stats.reddit_scanned or 0 }}</span>
+                        <div class="stat-label">Reddit Posts Scanned</div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">{{ total_reddit_posts_included or processing_stats.reddit_included or reactions|length }}</span>
+                        <div class="stat-label">Reddit Posts Included</div>
+                    </div>
+                    {% if processing_stats and processing_stats.relevance_rate %}
+                    <div class="stat-item">
+                        <span class="stat-number">{{ processing_stats.relevance_rate }}%</span>
+                        <div class="stat-label">Relevance Rate</div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if processing_stats %}
+                <div class="processing-summary">
+                    <h3>📊 Processing Summary</h3>
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <strong>{{ processing_stats.articles_found }}</strong> articles discovered from news sources
+                        </div>
+                        <div class="summary-item">
+                            <strong>{{ processing_stats.articles_relevant }}</strong> articles relevant to voice AI ({{ processing_stats.relevance_rate }}% relevance rate)
+                        </div>
+                        <div class="summary-item">
+                            <strong>{{ processing_stats.reddit_scanned }}</strong> Reddit posts scanned across target subreddits
+                        </div>
+                        <div class="summary-item">
+                            <strong>{{ processing_stats.reddit_included }}</strong> Reddit posts included (voice AI related)
+                        </div>
                     </div>
                 </div>
+                {% endif %}
                 
                 {% if trends and trends.available %}
                 <div class="trends-section">
@@ -659,5 +728,6 @@ def format_digest_for_email(digest):
         executive_summary=digest.get('executive_summary', ''),
         total_articles_found=digest.get('total_articles_found', 0),
         total_reddit_posts=digest.get('total_reddit_posts', 0),
-        trends=digest.get('trends', {})
+        trends=digest.get('trends', {}),
+        processing_stats=digest.get('processing_stats', {})
     )
