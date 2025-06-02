@@ -62,7 +62,7 @@ An automated intelligence platform that monitors the rapidly evolving AI voice t
 3. **Configure environment**
    \`\`\`bash
    cp .env.example .env
-   # Edit .env with your API keys (see Configuration section)
+   Edit .env with your API keys (see Configuration section)
    \`\`\`
 
 4. **Run your first scan**
