@@ -182,6 +182,11 @@ class BulletproofRedditScraper:
             if keyword in text_lower:
                 matched_keywords.append(keyword)
         
+        # More lenient matching - also check for "voice" + "AI" separately
+        if not matched_keywords:
+            if "voice" in text_lower and ("ai" in text_lower or "artificial intelligence" in text_lower):
+                matched_keywords.append("voice ai (context)")
+        
         return len(matched_keywords) > 0, matched_keywords
     
     async def scrape_reddit(self, news_items: Optional[List] = None) -> List[Dict]:
@@ -193,6 +198,7 @@ class BulletproofRedditScraper:
         logger.info(f"🚀 Starting bulletproof Reddit scraping...")
         
         all_posts = []
+        total_posts_checked = 0
         
         for subreddit_name in TARGET_SUBREDDITS:
             try:
@@ -202,10 +208,12 @@ class BulletproofRedditScraper:
                 try:
                     subreddit = self.reddit.subreddit(subreddit_name)
                     posts_checked = 0
+                    posts_found = 0
                     
                     # Check hot posts for voice AI content
-                    for post in subreddit.hot(limit=20):
+                    for post in subreddit.hot(limit=25):  # Increased from 20 to 25
                         posts_checked += 1
+                        total_posts_checked += 1
                         
                         try:
                             # Get post content
@@ -247,14 +255,18 @@ class BulletproofRedditScraper:
                                 }
                                 
                                 all_posts.append(post_data)
+                                posts_found += 1
                                 logger.info(f"📝 Found: {title[:60]}... (sentiment: {sentiment})")
-                                break  # Only take 1 post per subreddit
+                                
+                                # Allow up to 3 posts per subreddit
+                                if posts_found >= 3:
+                                    break
                         
                         except Exception as post_error:
                             logger.warning(f"Error processing individual post: {post_error}")
                             continue
                     
-                    logger.info(f"✅ Checked {posts_checked} posts in r/{subreddit_name}")
+                    logger.info(f"✅ Checked {posts_checked} posts in r/{subreddit_name}, found {posts_found} relevant")
                 
                 except Exception as subreddit_error:
                     logger.warning(f"Error accessing r/{subreddit_name}: {subreddit_error}")
@@ -270,26 +282,21 @@ class BulletproofRedditScraper:
         logger.info(f"🎯 Reddit scraping completed: {len(all_posts)} posts found")
 
         # Calculate total posts scanned
-        total_scanned = 0
-        for subreddit_name in TARGET_SUBREDDITS:
-            total_scanned += 20  # We scan 20 posts per subreddit
-
-        # Log scanning statistics
         logger.info(f"📊 Reddit Statistics:")
         logger.info(f"   Subreddits scanned: {len(TARGET_SUBREDDITS)}")
-        logger.info(f"   Total posts scanned: {total_scanned}")
+        logger.info(f"   Total posts scanned: {total_posts_checked}")
         logger.info(f"   Voice AI posts found: {len(all_posts)}")
-        if total_scanned > 0:
-            relevance_rate = (len(all_posts) / total_scanned) * 100
+        if total_posts_checked > 0:
+            relevance_rate = (len(all_posts) / total_posts_checked) * 100
             logger.info(f"   Relevance rate: {relevance_rate:.1f}%")
 
         # Add metadata to the results
         if all_posts:
             # Add scanning metadata to the first post (hacky but works)
             all_posts[0]['_metadata'] = {
-                'total_scanned': total_scanned,
+                'total_scanned': total_posts_checked,
                 'subreddits_scanned': len(TARGET_SUBREDDITS),
-                'relevance_rate': (len(all_posts) / total_scanned) * 100 if total_scanned > 0 else 0
+                'relevance_rate': (len(all_posts) / total_posts_checked) * 100 if total_posts_checked > 0 else 0
             }
 
         return all_posts

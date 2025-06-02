@@ -16,21 +16,23 @@
         }
         .container {
             background-color: white;
-            border-radius: 8px;
+            border-radius: 12px;
             padding: 30px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
         }
         h1 {
             color: #2c3e50;
             border-bottom: 3px solid #3498db;
-            padding-bottom: 10px;
+            padding-bottom: 15px;
             margin-bottom: 30px;
             text-align: center;
+            font-size: 28px;
         }
         h2 {
             color: #3498db;
             margin-top: 30px;
             margin-bottom: 20px;
+            font-size: 24px;
         }
         h3 {
             color: #e74c3c;
@@ -38,12 +40,13 @@
             margin-bottom: 15px;
             border-left: 4px solid #e74c3c;
             padding-left: 15px;
+            font-size: 20px;
         }
         .executive-summary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 25px;
-            border-radius: 10px;
+            border-radius: 12px;
             margin-bottom: 30px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
@@ -52,15 +55,54 @@
             margin-top: 0;
             margin-bottom: 15px;
         }
+        .trends-section {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .trends-section h2 {
+            color: white;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .trend-item {
+            background-color: rgba(255,255,255,0.15);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .trend-label {
+            font-weight: bold;
+        }
+        .trend-value {
+            font-size: 18px;
+        }
+        .insights-list {
+            list-style: none;
+            padding: 0;
+        }
+        .insights-list li {
+            background-color: rgba(255,255,255,0.1);
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 5px;
+        }
         .stats {
             background-color: #ecf0f1;
             padding: 20px;
-            border-radius: 8px;
+            border-radius: 12px;
             margin-bottom: 30px;
             text-align: center;
             display: flex;
             justify-content: space-around;
             flex-wrap: wrap;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
         .stat-item {
             margin: 10px;
@@ -82,8 +124,9 @@
             border-left: 4px solid #3498db;
             background-color: #f8f9fa;
             padding: 20px;
-            border-radius: 0 8px 8px 0;
+            border-radius: 0 12px 12px 0;
             transition: transform 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
         .news-item:hover {
             transform: translateX(5px);
@@ -114,7 +157,7 @@
             background: linear-gradient(135deg, #ff4500 0%, #ff6b35 100%);
             color: white;
             padding: 25px;
-            border-radius: 10px;
+            border-radius: 12px;
             margin-top: 30px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
@@ -135,7 +178,7 @@
         .reddit-post {
             background-color: rgba(255,255,255,0.15);
             padding: 15px;
-            border-radius: 8px;
+            border-radius: 12px;
             margin-bottom: 15px;
             border-left: 3px solid rgba(255,255,255,0.3);
         }
@@ -209,37 +252,151 @@
         .highlight {
             background-color: #fff3cd;
             padding: 15px;
-            border-radius: 5px;
+            border-radius: 8px;
             border-left: 4px solid #ffc107;
             margin-bottom: 20px;
         }
         .sentiment-summary {
             background-color: rgba(255,255,255,0.2);
             padding: 10px;
-            border-radius: 5px;
+            border-radius: 8px;
             margin-bottom: 15px;
             font-size: 14px;
+        }
+        .processing-summary {
+            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .processing-summary h3 {
+            color: white;
+            margin-top: 0;
+            margin-bottom: 15px;
+            border-left: 4px solid rgba(255,255,255,0.5);
+            padding-left: 15px;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        .summary-item {
+            background-color: rgba(255,255,255,0.15);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 3px solid rgba(255,255,255,0.5);
+        }
+        .summary-item strong {
+            color: #fff;
+            font-size: 18px;
+        }
+        .header-logo {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .header-logo img {
+            max-width: 150px;
+            height: auto;
+        }
+        .date-badge {
+            display: inline-block;
+            background-color: #3498db;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .section-divider {
+            height: 3px;
+            background: linear-gradient(to right, #3498db, transparent);
+            margin: 30px 0;
+            border-radius: 3px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1><span class="emoji">🔊</span>AI Voice News Digest - {{ date }}</h1>
+        <h1><span class="emoji">🔊</span>AI Voice News Digest <span class="date-badge">{{ date }}</span></h1>
         
         <div class="stats">
             <div class="stat-item">
-                <span class="stat-number">{{ total_articles_found or news_items|length }}</span>
+                <span class="stat-number">{{ total_articles_found or processing_stats.articles_found or news_items|length }}</span>
                 <div class="stat-label">Articles Found</div>
             </div>
             <div class="stat-item">
-                <span class="stat-number">{{ top_articles|length or news_items|length }}</span>
-                <div class="stat-label">Top Articles</div>
+                <span class="stat-number">{{ total_articles_relevant or processing_stats.articles_relevant or top_articles|length }}</span>
+                <div class="stat-label">Relevant Articles</div>
             </div>
             <div class="stat-item">
-                <span class="stat-number">{{ total_reddit_posts or reactions|length }}</span>
-                <div class="stat-label">Reddit Posts</div>
+                <span class="stat-number">{{ total_reddit_posts_scanned or processing_stats.reddit_scanned or 0 }}</span>
+                <div class="stat-label">Reddit Posts Scanned</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">{{ total_reddit_posts_included or processing_stats.reddit_included or reactions|length }}</span>
+                <div class="stat-label">Reddit Posts Included</div>
+            </div>
+            {% if processing_stats and processing_stats.relevance_rate %}
+            <div class="stat-item">
+                <span class="stat-number">{{ processing_stats.relevance_rate }}%</span>
+                <div class="stat-label">Relevance Rate</div>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if processing_stats %}
+        <div class="processing-summary">
+            <h3>📊 Processing Summary</h3>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <strong>{{ processing_stats.articles_found }}</strong> articles discovered from news sources
+                </div>
+                <div class="summary-item">
+                    <strong>{{ processing_stats.articles_relevant }}</strong> articles relevant to voice AI ({{ processing_stats.relevance_rate }}% relevance rate)
+                </div>
+                <div class="summary-item">
+                    <strong>{{ processing_stats.reddit_scanned }}</strong> Reddit posts scanned across target subreddits
+                </div>
+                <div class="summary-item">
+                    <strong>{{ processing_stats.reddit_included }}</strong> Reddit posts included (voice AI related)
+                </div>
             </div>
         </div>
+        {% endif %}
+        
+        {% if trends and trends.available %}
+        <div class="trends-section">
+            <h2>📊 Trends Analysis (Last {{ trends.runs_analyzed }} Runs)</h2>
+            <p><strong>Period:</strong> {{ trends.date_range }}</p>
+            
+            <div class="trend-item">
+                <span class="trend-label">Community Sentiment</span>
+                <span class="trend-value">{{ trends.sentiment.emoji }} {{ trends.sentiment.trend.title() }}</span>
+            </div>
+            
+            <div class="trend-item">
+                <span class="trend-label">Discussion Activity</span>
+                <span class="trend-value">{{ trends.activity.emoji }} {{ trends.activity.trend.title() }}</span>
+            </div>
+            
+            <div class="trend-item">
+                <span class="trend-label">News Volume</span>
+                <span class="trend-value">{{ trends.news_volume.emoji }} {{ trends.news_volume.trend.title() }}</span>
+            </div>
+            
+            {% if trends.insights %}
+            <h3 style="color: white; border-left-color: white;">Key Insights</h3>
+            <ul class="insights-list">
+                {% for insight in trends.insights %}
+                <li>{{ insight }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% endif %}
         
         {% if executive_summary %}
         <div class="executive-summary">
@@ -251,6 +408,8 @@
             {% endfor %}
         </div>
         {% endif %}
+        
+        <div class="section-divider"></div>
         
         {% if top_articles or news_items %}
             <h2>🏆 Top {{ (top_articles or news_items)|length }} Voice AI Articles</h2>
@@ -279,6 +438,8 @@
                 <p>No voice AI news found today. The scraper will continue monitoring for updates.</p>
             </div>
         {% endif %}
+        
+        <div class="section-divider"></div>
         
         {% if reactions %}
         <div class="reddit-section">
@@ -335,8 +496,10 @@
         
         <div class="footer">
             <p><strong>Generated by AI Voice News Scraper</strong> on {{ date }}</p>
-            <p>This digest includes top discussions from Reddit communities with AI-powered sentiment analysis.</p>
-            <p><em>Stay connected with the latest trends and community insights.</em></p>
+            <p>This digest includes trend analysis, top discussions from Reddit communities with AI-powered sentiment analysis.</p>
+            {% if trends and trends.available %}
+            <p><em>Trends based on analysis of the last {{ trends.runs_analyzed }} runs.</em></p>
+            {% endif %}
         </div>
     </div>
 </body>
