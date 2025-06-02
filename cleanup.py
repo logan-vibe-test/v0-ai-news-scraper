@@ -79,6 +79,12 @@ def cleanup_codebase():
         # Twitter files (not working anyway)
         "scrapers/twitter_scraper.py",
         "scrapers/twitter_scraper_improved.py",
+
+        # Redundant Reddit scrapers
+        "scrapers/reddit_scraper_fixed.py",
+        "scrapers/reddit_scraper_improved.py", 
+        "scrapers/reddit_scraper_simple.py",
+        "test_reddit_fix.py",
     ]
     
     for file in files_to_remove:
