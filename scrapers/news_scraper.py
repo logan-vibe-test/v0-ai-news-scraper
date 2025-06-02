@@ -24,7 +24,7 @@ def create_ssl_context():
     
     return context
 
-# Clean news sources without duplicates
+# Clean news sources without duplicates - WORKING SOURCES
 NEWS_SOURCES = [
     # RSS feeds (more reliable than web scraping)
     {
@@ -67,30 +67,10 @@ NEWS_SOURCES = [
         'url': 'https://www.wired.com/feed/tag/ai/latest/rss',
         'type': 'rss'
     },
-    
-    # Company blogs (web scraping as backup)
-    {
-        'name': 'OpenAI Blog',
-        'url': 'https://openai.com/news/',
-        'type': 'web',
-        'selector': 'a[href*="/news/"]'
-    },
     {
         'name': 'Google AI Blog',
         'url': 'https://ai.googleblog.com/feeds/posts/default',
-        'type': 'rss',  # Changed from web to RSS for more reliability
-    },
-    {
-        'name': 'Anthropic News',
-        'url': 'https://www.anthropic.com/news',
-        'type': 'web',
-        'selector': 'a[href*="/news/"]'
-    },
-    {
-        'name': 'ElevenLabs Blog',
-        'url': 'https://elevenlabs.io/blog',
-        'type': 'web',
-        'selector': 'a[href*="/blog/"]'
+        'type': 'rss'
     }
 ]
 
@@ -100,12 +80,7 @@ async def scrape_web_source(session, source):
         # Create SSL context
         ssl_context = create_ssl_context()
         
-        # Special handling for problematic domains
-        ssl_verify = True
-        if any(domain in source['url'] for domain in ['googleblog.com', 'ai.google']):
-            ssl_verify = False
-        
-        async with session.get(source['url'], timeout=10, ssl=ssl_context, verify_ssl=ssl_verify) as response:
+        async with session.get(source['url'], timeout=10, ssl=ssl_context) as response:
             if response.status != 200:
                 logger.error(f"Error fetching {source['name']}: {response.status}")
                 return []
@@ -205,7 +180,7 @@ async def scrape_news_sources():
     
     # Process web sources
     ssl_context = create_ssl_context()
-    connector = aiohttp.TCPConnector(ssl=ssl_context, verify_ssl=False)
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
     async with aiohttp.ClientSession(connector=connector) as session:
         web_tasks = []
         for source in NEWS_SOURCES:

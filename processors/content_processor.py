@@ -6,20 +6,40 @@ import re
 import asyncio
 import aiohttp
 from bs4 import BeautifulSoup
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain.chains.summarize import load_summarize_chain
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import PromptTemplate
-from langchain_core.documents import Document
 import os
 from dotenv import load_dotenv
 import ssl
 import certifi
 
-# Add this import at the top
-from config.keywords import ALL_VOICE_AI_KEYWORDS, PRIMARY_VOICE_AI_KEYWORDS, CONTEXT_KEYWORDS
+# Fix the import path
+try:
+    from config.keywords import ALL_VOICE_AI_KEYWORDS, PRIMARY_VOICE_AI_KEYWORDS, CONTEXT_KEYWORDS
+except ImportError:
+    # Fallback if config module not found
+    PRIMARY_VOICE_AI_KEYWORDS = [
+        'voice ai', 'ai voice', 'voice artificial intelligence',
+        'text-to-speech', 'tts', 'speech synthesis', 'voice synthesis',
+        'voice generation', 'voice model', 'neural voice',
+        'voice cloning', 'voice clone', 'synthetic voice',
+        'voice assistant', 'voice bot', 'conversational ai',
+        'voice interface', 'voice api', 'voice sdk',
+        'audio generation', 'speech generation', 'voice streaming',
+        'real-time voice', 'voice conversion', 'voice transformer',
+        'elevenlabs', 'eleven labs', 'openai voice', 'openai whisper',
+        'google voice', 'google speech', 'amazon polly', 'azure speech',
+        'microsoft speech', 'anthropic voice', 'meta voice',
+        'nvidia voice', 'adobe voice', 'murf', 'speechify',
+        'resemble ai', 'descript', 'wellsaid', 'lovo'
+    ]
+    
+    ALL_VOICE_AI_KEYWORDS = PRIMARY_VOICE_AI_KEYWORDS
+    
+    CONTEXT_KEYWORDS = [
+        'ai', 'artificial intelligence', 'machine learning', 'deep learning',
+        'neural network', 'model', 'algorithm', 'training', 'dataset',
+        'api', 'sdk', 'platform', 'technology', 'innovation',
+        'startup', 'funding', 'release', 'launch', 'announcement'
+    ]
 
 # Load environment variables
 load_dotenv()
@@ -36,6 +56,9 @@ async def fetch_article_content(url):
     """Fetch the full content of an article"""
     try:
         ssl_context = ssl.create_default_context(cafile=certifi.where())
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_OPTIONAL
+        
         connector = aiohttp.TCPConnector(ssl=ssl_context)
         
         async with aiohttp.ClientSession(connector=connector) as session:
@@ -67,40 +90,46 @@ async def fetch_article_content(url):
         return None
 
 def is_relevant_to_voice_ai(text):
-    """Check if the content is relevant to voice AI with improved logic"""
+    """Check if the content is relevant to voice AI with LENIENT logic"""
+    if not text:
+        return False
+        
     text_lower = text.lower()
     
-    # Check for primary keyword matches (must have at least one)
-    primary_matches = sum(1 for keyword in PRIMARY_VOICE_AI_KEYWORDS if keyword in text_lower)
+    # Check for ANY voice AI keyword matches (more lenient)
+    keyword_matches = sum(1 for keyword in VOICE_AI_KEYWORDS if keyword in text_lower)
     
-    if primary_matches == 0:
-        return False  # No primary voice AI keywords found
-    
-    # If we have primary matches, check for additional context
-    all_keyword_matches = sum(1 for keyword in VOICE_AI_KEYWORDS if keyword in text_lower)
-    context_matches = sum(1 for keyword in CONTEXT_KEYWORDS if keyword in text_lower)
-    
-    # Strong relevance: multiple voice AI keywords OR voice AI + context
-    if all_keyword_matches >= 2 or (primary_matches >= 1 and context_matches >= 1):
+    # If we have any voice AI keywords, it's relevant
+    if keyword_matches > 0:
+        logger.info(f"Found {keyword_matches} voice AI keywords - marking as relevant")
         return True
     
-    # For single primary match, look for context in the same sentence
-    if primary_matches == 1:
-        sentences = re.split(r'[.!?]+', text_lower)
-        for sentence in sentences:
-            if any(keyword in sentence for keyword in PRIMARY_VOICE_AI_KEYWORDS):
-                if any(context in sentence for context in CONTEXT_KEYWORDS):
-                    return True
+    # Also check for AI + voice combinations
+    has_ai = any(word in text_lower for word in ['ai', 'artificial intelligence'])
+    has_voice = any(word in text_lower for word in ['voice', 'speech', 'audio'])
+    
+    if has_ai and has_voice:
+        logger.info("Found AI + voice combination - marking as relevant")
+        return True
     
     return False
 
 async def summarize_content(content, title):
-    """Summarize the article content using LangChain and OpenAI"""
+    """Summarize the article content - simplified version"""
     if not OPENAI_API_KEY:
-        logger.error("OpenAI API key not configured")
-        return "Summary not available (API key not configured)"
+        logger.warning("OpenAI API key not configured - using simple summary")
+        # Simple fallback summary
+        sentences = content.split('.')[:3]
+        return '. '.join(sentences) + '.'
     
     try:
+        # Try to use OpenAI for summarization
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        from langchain_openai import ChatOpenAI
+        from langchain_core.prompts import PromptTemplate
+        from langchain_core.documents import Document
+        from langchain.chains.summarize import load_summarize_chain
+        
         # Split text into chunks
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=2000,
@@ -149,29 +178,39 @@ async def summarize_content(content, title):
         return summary.strip()
     except Exception as e:
         logger.error(f"Error summarizing content: {str(e)}")
-        return "Error generating summary"
+        # Fallback to simple summary
+        sentences = content.split('.')[:3]
+        return '. '.join(sentences) + '.'
 
 async def process_content(news_item):
     """Process a news item: fetch content, check relevance, summarize"""
     logger.info(f"Processing: {news_item['title']}")
     
-    # Fetch the full article content
-    content = await fetch_article_content(news_item['url'])
-    if not content:
-        logger.warning(f"Could not fetch content for {news_item['url']}")
-        return None
+    # First check title for relevance
+    if is_relevant_to_voice_ai(news_item['title']):
+        logger.info(f"Title is relevant to voice AI: {news_item['title']}")
+        
+        # Try to fetch the full article content
+        content = await fetch_article_content(news_item['url'])
+        if content:
+            news_item['content'] = content
+            
+            # Double-check with full content
+            if is_relevant_to_voice_ai(content):
+                # Summarize the content
+                summary = await summarize_content(content, news_item['title'])
+                news_item['summary'] = summary
+                
+                logger.info(f"Processed article: {news_item['title']}")
+                return news_item
+            else:
+                logger.info(f"Full content not relevant to voice AI: {news_item['title']}")
+        else:
+            # If we can't fetch content but title is relevant, still include it
+            logger.warning(f"Could not fetch content but title is relevant: {news_item['title']}")
+            news_item['content'] = news_item.get('content', '')
+            news_item['summary'] = f"Summary not available. Title: {news_item['title']}"
+            return news_item
     
-    # Store the content
-    news_item['content'] = content
-    
-    # Check if the content is relevant to voice AI
-    if not is_relevant_to_voice_ai(content):
-        logger.info(f"Article not relevant to voice AI: {news_item['title']}")
-        return None
-    
-    # Summarize the content
-    summary = await summarize_content(content, news_item['title'])
-    news_item['summary'] = summary
-    
-    logger.info(f"Processed article: {news_item['title']}")
-    return news_item
+    logger.info(f"Article not relevant to voice AI: {news_item['title']}")
+    return None
