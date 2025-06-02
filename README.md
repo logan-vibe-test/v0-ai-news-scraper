@@ -100,11 +100,7 @@ SMTP_USERNAME=your-email@gmail.com
 SMTP_PASSWORD=your-app-password
 EMAIL_FROM=your-email@gmail.com
 EMAIL_TO=recipient@gmail.com
-\`\`\`
 
-### Optional Integrations
-
-\`\`\`env
 # Reddit API (Highly Recommended)
 REDDIT_CLIENT_ID=your-reddit-client-id
 REDDIT_CLIENT_SECRET=your-reddit-client-secret
