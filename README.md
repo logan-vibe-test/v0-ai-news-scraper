@@ -1,64 +1,38 @@
 # AI Voice News Scraper
 
-A comprehensive Python-based system for monitoring AI voice technology news and developer reactions from Reddit.
+A Python application that monitors AI voice technology news and community discussions, delivering daily digests with trend analysis.
 
-## Features
+## 🚀 Quick Start
 
-- **News Monitoring**: Scrapes trusted tech news sites and company blogs for AI voice technology updates
-- **Developer Reaction Tracking**: Monitors Reddit for community discussions about voice AI
-- **Content Processing**: Filters for relevance, summarizes articles using OpenAI
-- **Notification System**: Delivers daily digests via Slack and/or email
-- **Executive Summary**: Provides AI-generated insights on the voice AI landscape
+1. **Setup environment:**
+   \`\`\`bash
+   cp .env.example .env
+   # Edit .env with your API keys
+   \`\`\`
 
-## Quick Start
+2. **Install dependencies:**
+   \`\`\`bash
+   pip install -r requirements.txt
+   \`\`\`
 
-### Installation
+3. **Run the application:**
+   \`\`\`bash
+   python main_fixed.py
+   \`\`\`
 
-\`\`\`bash
-# Clone the repository
-git clone https://github.com/yourusername/ai-voice-news-scraper
-cd ai-voice-news-scraper
+   Or use the run script:
+   \`\`\`bash
+   ./run.sh
+   \`\`\`
 
-# Install the package
-pip install -e .
+## 📋 Required Configuration
 
-# Create and configure your .env file
-cp .env.example .env
-# Edit .env with your API keys
-\`\`\`
-
-### Running the Scraper
-
-\`\`\`bash
-# Run with default settings
-ai-voice-scraper
-
-# Set custom log level
-ai-voice-scraper --log-level DEBUG
-\`\`\`
-
-### Docker Installation
-
-\`\`\`bash
-# Build the Docker image
-docker build -t ai-voice-scraper .
-
-# Run the Docker container
-docker run --env-file .env ai-voice-scraper
-\`\`\`
-
-## Configuration
-
-### Required Environment Variables
-
+### Essential API Keys (.env file)
 \`\`\`env
-# OpenAI (for content summarization)
+# Required: OpenAI for content summarization
 OPENAI_API_KEY=your_openai_api_key
 
-# MongoDB (for data storage)
-MONGODB_URI=mongodb://localhost:27017/ai_voice_news
-
-# Email notifications
+# Required: Email notifications
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=your_email@gmail.com
@@ -67,126 +41,152 @@ EMAIL_FROM=your_email@gmail.com
 EMAIL_TO=recipient@gmail.com
 \`\`\`
 
-### Optional Environment Variables
-
+### Optional API Keys
 \`\`\`env
-# Reddit API (for Reddit scraping)
+# Optional: Reddit API (for Reddit discussions)
 REDDIT_CLIENT_ID=your_reddit_client_id
 REDDIT_CLIENT_SECRET=your_reddit_client_secret
-REDDIT_USER_AGENT=ai_voice_news_scraper_v1.0
 
-# Slack notifications
+# Optional: MongoDB (uses file storage if not provided)
+MONGODB_URI=mongodb://localhost:27017/ai_voice_news
+
+# Optional: Slack notifications
 SLACK_API_TOKEN=xoxb-your-slack-token
 SLACK_CHANNEL=#ai-voice-news
-
-# Logging level (DEBUG, INFO, WARNING, ERROR)
-LOG_LEVEL=INFO
 \`\`\`
 
-## Project Structure
+## 🎯 What It Does
+
+1. **📰 Scrapes News** - Monitors tech news sites for voice AI articles
+2. **🔍 Filters Content** - Uses AI to identify relevant voice AI news
+3. **💬 Monitors Reddit** - Tracks discussions in relevant subreddits
+4. **📊 Analyzes Trends** - Compares sentiment and activity over time
+5. **📧 Sends Digest** - Delivers comprehensive email with insights
+
+## 📁 Project Structure
 
 \`\`\`
-ai-voice-scraper/
-├── ai_voice_scraper/           # Main package
-│   ├── __init__.py
-│   ├── main.py                 # Main entry point
-│   ├── config/                 # Configuration
-│   │   ├── __init__.py
-│   │   └── keywords.py         # Voice AI keywords
-│   ├── scrapers/               # Data sources
-│   │   ├── __init__.py
-│   │   ├── news_scraper.py     # News sites
-│   │   └── reddit_scraper.py   # Reddit
-│   ├── processors/             # Processing
-│   │   ├── __init__.py
-│   │   └── content_processor.py # Content filtering & summarization
-│   ├── storage/                # Data storage
-│   │   ├── __init__.py
-│   │   └── db_manager.py       # Database operations
-│   ├── notifiers/              # Notifications
-│   │   ├── __init__.py
-│   │   ├── email_notifier.py   # Email
-│   │   └── slack_notifier.py   # Slack
-│   └── templates/              # HTML templates
-│       └── email_digest.html   # Email template
-├── tests/                      # Test suite
-│   ├── __init__.py
-│   └── test_system.py          # System tests
-├── setup.py                    # Package setup
-├── requirements.txt            # Dependencies
-├── .env.example                # Environment template
-├── README.md                   # Documentation
-└── Dockerfile                  # Docker configuration
+ai-voice-news-scraper/
+├── main_fixed.py              # Main application
+├── requirements.txt           # Dependencies
+├── .env.example              # Environment template
+├── config/keywords.py        # Voice AI keywords
+├── scrapers/                 # Data collection
+├── processors/               # Content processing & trends
+├── storage/                  # Database operations
+├── notifiers/                # Email & Slack notifications
+└── templates/                # Email template
 \`\`\`
 
-## Customization
+## 🔧 API Setup
 
-- **Keywords**: Edit `ai_voice_scraper/config/keywords.py` to customize voice AI detection
-- **News Sources**: Edit `ai_voice_scraper/scrapers/news_scraper.py` to add/modify sources
-- **Email Template**: Edit `ai_voice_scraper/templates/email_digest.html` for custom formatting
+### OpenAI API
+1. Visit https://platform.openai.com/api-keys
+2. Create an API key
+3. Add to .env as `OPENAI_API_KEY`
 
-## API Setup Guides
-
-### Reddit API Setup
-1. Go to https://www.reddit.com/prefs/apps
+### Reddit API (Optional)
+1. Visit https://www.reddit.com/prefs/apps
 2. Create a new app (script type)
-3. Note the client ID and secret
+3. Add client ID and secret to .env
 
-### OpenAI API Setup
-1. Sign up at https://platform.openai.com
-2. Generate an API key
-3. Add billing information
+### Gmail SMTP (Recommended)
+1. Enable 2-factor authentication
+2. Generate an app password
+3. Use app password in .env (not your regular password)
 
-## Scheduling
+## 📧 Output
 
-### Local Scheduling with cron
+You'll receive a daily email digest containing:
+- **📊 Trends Analysis** - Sentiment changes over recent runs
+- **📰 Top Voice AI Articles** - Curated and summarized
+- **💬 Reddit Discussions** - Community sentiment analysis
+- **🎯 Executive Summary** - AI-generated insights
 
-Add to your crontab for daily runs:
+## 📅 Scheduling
+
+### Daily Cron Job
 \`\`\`bash
-0 9 * * * cd /path/to/ai-voice-news-scraper && ai-voice-scraper
+# Run daily at 9 AM
+0 9 * * * cd /path/to/project && python main_fixed.py
 \`\`\`
 
-### Scheduling with Systemd
-
-Create a service file at `/etc/systemd/system/ai-voice-scraper.service`:
-
-\`\`\`ini
-[Unit]
-Description=AI Voice News Scraper
-After=network.target
-
-[Service]
-Type=oneshot
-WorkingDirectory=/path/to/ai-voice-news-scraper
-ExecStart=/path/to/python -m ai_voice_scraper.main
-User=youruser
-Environment=PYTHONPATH=/path/to/ai-voice-news-scraper
-
-[Install]
-WantedBy=multi-user.target
-\`\`\`
-
-Create a timer file at `/etc/systemd/system/ai-voice-scraper.timer`:
-
-\`\`\`ini
-[Unit]
-Description=Run AI Voice News Scraper daily
-
-[Timer]
-OnCalendar=*-*-* 09:00:00
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-\`\`\`
-
-Enable and start the timer:
-
+### Manual Run
 \`\`\`bash
-sudo systemctl enable ai-voice-scraper.timer
-sudo systemctl start ai-voice-scraper.timer
+python main_fixed.py
 \`\`\`
 
-## License
+## 🆘 Troubleshooting
 
-MIT License - see LICENSE file for details
+**Import Errors:**
+\`\`\`bash
+pip install -r requirements.txt
+\`\`\`
+
+**Missing .env:**
+\`\`\`bash
+cp .env.example .env
+# Edit with your API keys
+\`\`\`
+
+**Reddit SSL Issues:**
+The Reddit scraper includes automatic SSL fixes.
+
+**No Email Received:**
+- Check spam folder
+- Verify SMTP credentials
+- Test with Gmail app password
+
+## 📊 Runtime
+
+- **Duration:** ~3-5 minutes
+- **Articles Found:** 10-30 per run
+- **Reddit Posts:** 5-15 per run
+- **Memory Usage:** ~100MB
+- **Network:** Moderate (RSS feeds + API calls)
+
+## 🎉 Success Indicators
+
+When working correctly, you should see:
+\`\`\`
+🚀 Starting AI Voice News Scraper
+📰 Found 15 articles
+🔍 Processed 8 relevant articles
+💬 Found 6 Reddit posts about AI voice
+📊 Stored run summary for trends analysis
+✅ Email sent
+✅ Pipeline complete
+\`\`\`
+
+## 📝 License
+
+MIT License - Feel free to modify and use for your projects.
+\`\`\`
+
+```plaintext file="requirements.txt"
+# Core dependencies
+aiohttp>=3.8.0
+beautifulsoup4>=4.11.0
+python-dotenv>=1.0.0
+feedparser>=6.0.0
+
+# AI/ML processing
+langchain>=0.1.0
+langchain-community>=0.0.10
+langchain-openai>=0.0.2
+openai>=1.6.1,&lt;2.0.0
+
+# Database (optional)
+motor>=3.3.0
+pymongo>=4.6.0
+
+# Reddit API
+praw>=7.7.0
+prawcore>=2.3.0
+requests>=2.28.0
+urllib3>=1.26.0
+certifi>=2023.0.0
+
+# Notifications
+slack-sdk>=3.26.0
+jinja2>=3.1.0
