@@ -27,7 +27,7 @@
 
 ### **🚀 Quick Debug Steps:**
 
-```bash
+\`\`\`bash
 # Run the debug script to see what's happening
 python debug.py
 

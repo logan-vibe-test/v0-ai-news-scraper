@@ -8,7 +8,8 @@ import os
 
 from ai_voice_scraper.scrapers.news_scraper import scrape_news_sources
 from ai_voice_scraper.scrapers.reddit_scraper import scrape_reddit
-from ai_voice_scraper.processors.content_processor import process_content
+# Temporarily use relaxed processor for debugging
+from ai_voice_scraper.processors.content_processor_relaxed import process_content_relaxed as process_content
 from ai_voice_scraper.storage.db_manager import store_news_item, store_reaction, store_run_summary
 from ai_voice_scraper.notifiers.email_notifier import send_email_digest
 from ai_voice_scraper.notifiers.slack_notifier import send_slack_digest
