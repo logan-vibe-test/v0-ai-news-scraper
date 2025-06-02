@@ -100,7 +100,10 @@ class SystemTester:
             # Mock the fetch_article_content function to return our test content
             import processors.content_processor as cp
             original_fetch = cp.fetch_article_content
-            cp.fetch_article_content = lambda url: test_article['content']
+            
+            async def mock_fetch(url):
+                return test_article['content']
+            cp.fetch_article_content = mock_fetch
             
             processed = await process_content(test_article)
             
@@ -131,7 +134,7 @@ class SystemTester:
             return False
         
         try:
-            from scrapers.reddit_scraper import scrape_reddit
+            from scrapers.reddit_scraper_improved import scrape_reddit
             reactions = await scrape_reddit([])
             
             logger.info(f"✅ Reddit scraping successful: {len(reactions)} reactions found")

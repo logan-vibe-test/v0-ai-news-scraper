@@ -1,5 +1,5 @@
 """
-Content processor for AI Voice News Scraper
+Content processor for AI Voice News Scraper - Fixed version
 """
 import logging
 import re
@@ -11,10 +11,12 @@ from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains.summarize import load_summarize_chain
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from langchain.docstore.document import Document
+from langchain_core.prompts import PromptTemplate
+from langchain_core.documents import Document
 import os
 from dotenv import load_dotenv
+import ssl
+import certifi
 
 # Add this import at the top
 from config.keywords import ALL_VOICE_AI_KEYWORDS, PRIMARY_VOICE_AI_KEYWORDS, CONTEXT_KEYWORDS
@@ -33,8 +35,11 @@ VOICE_AI_KEYWORDS = ALL_VOICE_AI_KEYWORDS
 async def fetch_article_content(url):
     """Fetch the full content of an article"""
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        
+        async with aiohttp.ClientSession(connector=connector) as session:
+            async with session.get(url, timeout=10) as response:
                 if response.status != 200:
                     logger.error(f"Error fetching article: {response.status}")
                     return None

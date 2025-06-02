@@ -150,13 +150,16 @@ async def scrape_reddit(news_items):
     # Process each subreddit
     for subreddit in SUBREDDITS:
         # Note: Reddit API operations are synchronous, so we run them in a thread pool
-        task = asyncio.to_thread(process_subreddit, reddit, subreddit, news_items)
+        task = asyncio.create_task(asyncio.to_thread(process_subreddit, reddit, subreddit, news_items))
         tasks.append(task)
     
     # Gather results
-    results = await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
     for result in results:
-        all_reactions.extend(result)
+        if isinstance(result, list):
+            all_reactions.extend(result)
+        else:
+            logger.error(f"Task failed: {result}")
     
     logger.info(f"Total Reddit reactions found: {len(all_reactions)}")
     return all_reactions

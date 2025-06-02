@@ -1,5 +1,5 @@
 """
-News scraper module for AI Voice News Scraper - Updated with better sources
+News scraper module for AI Voice News Scraper - Fixed version
 """
 import asyncio
 import logging
@@ -7,10 +7,12 @@ from datetime import datetime
 import aiohttp
 from bs4 import BeautifulSoup
 import feedparser
+import ssl
+import certifi
 
 logger = logging.getLogger(__name__)
 
-# Updated news sources with more RSS feeds (more reliable)
+# Clean news sources without duplicates
 NEWS_SOURCES = [
     # RSS feeds (more reliable than web scraping)
     {
@@ -57,15 +59,15 @@ NEWS_SOURCES = [
     # Company blogs (web scraping as backup)
     {
         'name': 'OpenAI Blog',
-        'url': 'https://openai.com/blog',
+        'url': 'https://openai.com/news/',
         'type': 'web',
-        'selector': 'a[href*="/blog/"]'
+        'selector': 'a[href*="/news/"]'
     },
     {
         'name': 'Google AI Blog',
-        'url': 'https://ai.googleblog.com/',
+        'url': 'https://blog.google/technology/ai/',
         'type': 'web',
-        'selector': 'h2.post-title a, .post-title a'
+        'selector': 'h3 a, .article-title a'
     },
     {
         'name': 'Anthropic News',
@@ -82,9 +84,12 @@ NEWS_SOURCES = [
 ]
 
 async def scrape_web_source(session, source):
-    """Scrape a web-based news source"""
+    """Scrape a web-based news source with SSL handling"""
     try:
-        async with session.get(source['url'], timeout=10) as response:
+        # Create SSL context
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        
+        async with session.get(source['url'], timeout=10, ssl=ssl_context) as response:
             if response.status != 200:
                 logger.error(f"Error fetching {source['name']}: {response.status}")
                 return []
@@ -125,8 +130,11 @@ async def scrape_web_source(session, source):
         return []
 
 async def scrape_rss_source(source):
-    """Scrape an RSS feed source"""
+    """Scrape an RSS feed source with better error handling"""
     try:
+        # Set user agent for feedparser
+        feedparser.USER_AGENT = "AI Voice News Scraper 1.0"
+        
         feed = feedparser.parse(source['url'])
         
         if not feed.entries:
@@ -173,7 +181,8 @@ async def scrape_news_sources():
                 logger.error(f"RSS task failed: {result}")
     
     # Process web sources
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(ssl=ssl.create_default_context(cafile=certifi.where()))
+    async with aiohttp.ClientSession(connector=connector) as session:
         web_tasks = []
         for source in NEWS_SOURCES:
             if source['type'] == 'web':
@@ -188,5 +197,13 @@ async def scrape_news_sources():
                 else:
                     logger.error(f"Web task failed: {result}")
     
-    logger.info(f"Total articles scraped: {len(all_articles)}")
-    return all_articles
+    # Remove duplicates based on URL
+    seen_urls = set()
+    unique_articles = []
+    for article in all_articles:
+        if article['url'] not in seen_urls:
+            seen_urls.add(article['url'])
+            unique_articles.append(article)
+    
+    logger.info(f"Total unique articles scraped: {len(unique_articles)}")
+    return unique_articles
