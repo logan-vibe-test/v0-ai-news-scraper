@@ -134,7 +134,7 @@ class SystemTester:
             return False
         
         try:
-            from scrapers.reddit_scraper_improved import scrape_reddit
+            from scrapers.reddit_scraper import scrape_reddit
             reactions = await scrape_reddit([])
             
             logger.info(f"✅ Reddit scraping successful: {len(reactions)} reactions found")

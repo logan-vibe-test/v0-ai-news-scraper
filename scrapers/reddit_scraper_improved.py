@@ -7,8 +7,7 @@ import praw
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
-import time
-import re
+from config.keywords import VOICE_AI_KEYWORDS, NEGATIVE_KEYWORDS
 
 # Load environment variables
 load_dotenv()
@@ -19,212 +18,282 @@ logger = logging.getLogger(__name__)
 REDDIT_CLIENT_ID = os.getenv('REDDIT_CLIENT_ID')
 REDDIT_CLIENT_SECRET = os.getenv('REDDIT_CLIENT_SECRET')
 REDDIT_USER_AGENT = os.getenv('REDDIT_USER_AGENT', 'ai_voice_news_scraper v1.0')
-REDDIT_USERNAME = os.getenv('REDDIT_USERNAME')
-REDDIT_PASSWORD = os.getenv('REDDIT_PASSWORD')
 
 # Subreddits to monitor - expanded list
 SUBREDDITS = [
     'MachineLearning',
-    'LanguageTechnology',
+    'LanguageTechnology', 
     'artificial',
-    'AIVoice',
     'OpenAI',
-    'ElevenLabs',
-    'TextToSpeech',
-    'VoiceActing',  # May have discussions about AI replacing voice actors
-    'audioengineering',  # Sometimes discusses voice AI
-    'VoiceOver',
-    'AIGeneratedContent',
-    'AIArt',  # Sometimes includes audio/voice discussions
-    'GPT4',
-    'LocalLLaMA',  # Open source AI community
-    'AnthropicAI'
+    'singularity',
+    'ArtificialIntelligence',
+    'deeplearning',
+    'ChatGPT',
+    'LocalLLaMA',
+    'MediaSynthesis',
+    'compsci',
+    'technology'
 ]
 
-# Voice AI keywords for filtering
-VOICE_KEYWORDS = [
-    'voice ai', 'text-to-speech', 'tts', 'speech synthesis', 
-    'voice synthesis', 'voice model', 'voice generation',
-    'elevenlabs', 'openai voice', 'audio generation',
-    'voice clone', 'voice cloning', 'synthetic voice',
-    'ai voice', 'neural voice', 'voice assistant'
-]
-
-def initialize_reddit():
-    """Initialize Reddit API client with better error handling"""
+async def initialize_reddit():
+    """Initialize Reddit API client"""
     if not all([REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET]):
         logger.error("Reddit API credentials not configured")
         return None
     
     try:
-        # Try with username/password if available (better API limits)
-        if REDDIT_USERNAME and REDDIT_PASSWORD:
-            reddit = praw.Reddit(
-                client_id=REDDIT_CLIENT_ID,
-                client_secret=REDDIT_CLIENT_SECRET,
-                user_agent=REDDIT_USER_AGENT,
-                username=REDDIT_USERNAME,
-                password=REDDIT_PASSWORD
-            )
-            logger.info("Initialized Reddit client with user authentication")
-        else:
-            # Fall back to read-only mode
-            reddit = praw.Reddit(
-                client_id=REDDIT_CLIENT_ID,
-                client_secret=REDDIT_CLIENT_SECRET,
-                user_agent=REDDIT_USER_AGENT
-            )
-            logger.info("Initialized Reddit client in read-only mode")
-        
+        reddit = praw.Reddit(
+            client_id=REDDIT_CLIENT_ID,
+            client_secret=REDDIT_CLIENT_SECRET,
+            user_agent=REDDIT_USER_AGENT
+        )
+        # Test the connection
+        reddit.user.me()
+        logger.info("Reddit API connection successful")
         return reddit
     except Exception as e:
         logger.error(f"Error initializing Reddit client: {str(e)}")
         return None
 
-def is_relevant_to_voice_ai(text):
-    """Check if text is relevant to voice AI"""
+def calculate_relevance_score(text):
+    """Calculate relevance score for voice AI content"""
     text_lower = text.lower()
-    return any(keyword in text_lower for keyword in VOICE_KEYWORDS)
+    score = 0
+    
+    # Primary voice AI keywords (high weight)
+    primary_keywords = [
+        'voice ai', 'text-to-speech', 'tts', 'speech synthesis',
+        'voice synthesis', 'voice model', 'voice generation',
+        'elevenlabs', 'openai voice', 'audio generation',
+        'voice cloning', 'speech generation', 'voice assistant'
+    ]
+    
+    for keyword in primary_keywords:
+        if keyword in text_lower:
+            score += 10
+    
+    # Secondary keywords (medium weight)
+    secondary_keywords = [
+        'whisper', 'speech', 'audio', 'voice', 'speaking',
+        'pronunciation', 'accent', 'intonation', 'prosody',
+        'phoneme', 'vocoder', 'neural voice', 'ai voice'
+    ]
+    
+    for keyword in secondary_keywords:
+        if keyword in text_lower:
+            score += 3
+    
+    # Company/product keywords (medium weight)
+    company_keywords = [
+        'eleven labs', 'murf', 'speechify', 'descript',
+        'resemble', 'replica', 'tortoise tts', 'bark',
+        'coqui', 'festival', 'espeak', 'mary tts'
+    ]
+    
+    for keyword in company_keywords:
+        if keyword in text_lower:
+            score += 5
+    
+    # Technical terms (low weight)
+    technical_keywords = [
+        'mel spectrogram', 'vocoder', 'griffin lim',
+        'wavenet', 'tacotron', 'fastspeech', 'glow tts',
+        'neural vocoder', 'autoregressive', 'transformer'
+    ]
+    
+    for keyword in technical_keywords:
+        if keyword in text_lower:
+            score += 2
+    
+    # Negative keywords (reduce score)
+    negative_keywords = [
+        'music generation', 'image generation', 'video generation',
+        'text generation', 'code generation', 'unrelated'
+    ]
+    
+    for keyword in negative_keywords:
+        if keyword in text_lower:
+            score -= 5
+    
+    return max(0, score)  # Don't allow negative scores
 
-def process_subreddit(reddit, subreddit_name, max_posts=25):
+def is_relevant_to_voice_ai(post_or_comment, min_score=5):
+    """Check if a post or comment is relevant to voice AI"""
+    try:
+        # Get text content
+        title = getattr(post_or_comment, 'title', '')
+        body = getattr(post_or_comment, 'body', '') or getattr(post_or_comment, 'selftext', '')
+        
+        text = f"{title} {body}"
+        
+        # Skip very short content
+        if len(text.strip()) < 20:
+            return False, 0
+        
+        # Calculate relevance score
+        score = calculate_relevance_score(text)
+        
+        # Check if it meets minimum threshold
+        is_relevant = score >= min_score
+        
+        return is_relevant, score
+        
+    except Exception as e:
+        logger.warning(f"Error checking relevance: {str(e)}")
+        return False, 0
+
+async def process_subreddit(reddit, subreddit_name, time_filter='day', limit=100):
     """Process a single subreddit for voice AI content"""
     try:
-        logger.info(f"Processing r/{subreddit_name}")
         subreddit = reddit.subreddit(subreddit_name)
         reactions = []
         
-        # Get hot and new posts
-        posts = list(subreddit.hot(limit=max_posts))
-        posts.extend(list(subreddit.new(limit=max_posts)))
+        logger.info(f"Processing r/{subreddit_name}...")
         
-        # Remove duplicates
-        seen_ids = set()
-        unique_posts = []
-        for post in posts:
-            if post.id not in seen_ids:
-                seen_ids.add(post.id)
-                unique_posts.append(post)
+        # Get posts from different time periods
+        post_sources = [
+            ('hot', subreddit.hot(limit=limit//3)),
+            ('new', subreddit.new(limit=limit//3)),
+            ('top', subreddit.top(time_filter=time_filter, limit=limit//3))
+        ]
         
-        logger.info(f"Found {len(unique_posts)} unique posts in r/{subreddit_name}")
+        processed_urls = set()  # Avoid duplicates
         
-        # Process each post
-        for post in unique_posts:
-            # Skip posts older than 3 days
-            post_time = datetime.fromtimestamp(post.created_utc)
-            if datetime.now() - post_time > timedelta(days=3):
+        for source_name, posts in post_sources:
+            try:
+                for post in posts:
+                    # Skip if already processed
+                    if post.url in processed_urls:
+                        continue
+                    processed_urls.add(post.url)
+                    
+                    # Skip posts older than 7 days
+                    post_time = datetime.fromtimestamp(post.created_utc)
+                    if datetime.now() - post_time > timedelta(days=7):
+                        continue
+                    
+                    # Check relevance
+                    is_relevant, score = is_relevant_to_voice_ai(post)
+                    
+                    if is_relevant:
+                        # Process the post
+                        post_data = {
+                            'platform': 'reddit',
+                            'type': 'post',
+                            'subreddit': subreddit_name,
+                            'title': post.title,
+                            'content': post.selftext,
+                            'url': f"https://reddit.com{post.permalink}",
+                            'author': post.author.name if post.author else '[deleted]',
+                            'score': post.score,
+                            'created_utc': post.created_utc,
+                            'num_comments': post.num_comments,
+                            'relevance_score': score,
+                            'source_type': source_name,
+                            'related_news': []
+                        }
+                        
+                        reactions.append(post_data)
+                        
+                        # Get top comments for highly relevant posts
+                        if score >= 15 and post.num_comments > 0:
+                            try:
+                                post.comments.replace_more(limit=0)
+                                for comment in post.comments.list()[:5]:  # Top 5 comments
+                                    if len(comment.body) > 50:  # Skip very short comments
+                                        comment_relevant, comment_score = is_relevant_to_voice_ai(comment, min_score=3)
+                                        
+                                        if comment_relevant:
+                                            comment_data = {
+                                                'platform': 'reddit',
+                                                'type': 'comment',
+                                                'subreddit': subreddit_name,
+                                                'parent_id': post.id,
+                                                'content': comment.body,
+                                                'url': f"https://reddit.com{comment.permalink}",
+                                                'author': comment.author.name if comment.author else '[deleted]',
+                                                'score': comment.score,
+                                                'created_utc': comment.created_utc,
+                                                'relevance_score': comment_score,
+                                                'related_news': []
+                                            }
+                                            reactions.append(comment_data)
+                            except Exception as e:
+                                logger.warning(f"Error processing comments for post {post.id}: {str(e)}")
+                        
+                        # Limit to prevent too many results from one subreddit
+                        if len(reactions) >= 20:
+                            break
+                
+                if len(reactions) >= 20:
+                    break
+                    
+            except Exception as e:
+                logger.warning(f"Error processing {source_name} posts in r/{subreddit_name}: {str(e)}")
                 continue
-            
-            # Check if post is about voice AI
-            combined_text = f"{post.title} {post.selftext}"
-            if is_relevant_to_voice_ai(combined_text):
-                # Process the post
-                post_data = {
-                    'platform': 'reddit',
-                    'type': 'post',
-                    'subreddit': subreddit_name,
-                    'title': post.title,
-                    'content': post.selftext,
-                    'url': f"https://reddit.com{post.permalink}",
-                    'author': post.author.name if post.author else '[deleted]',
-                    'score': post.score,
-                    'created_utc': post.created_utc,
-                    'num_comments': post.num_comments,
-                    'related_news': []
-                }
-                
-                reactions.append(post_data)
-                logger.info(f"Found relevant post: {post.title}")
-                
-                # Get top comments (with rate limiting)
-                try:
-                    post.comments.replace_more(limit=0)  # Remove MoreComments
-                    for comment in list(post.comments)[:10]:  # Top 10 comments
-                        if is_relevant_to_voice_ai(comment.body):
-                            comment_data = {
-                                'platform': 'reddit',
-                                'type': 'comment',
-                                'subreddit': subreddit_name,
-                                'parent_id': post.id,
-                                'content': comment.body,
-                                'url': f"https://reddit.com{comment.permalink}",
-                                'author': comment.author.name if comment.author else '[deleted]',
-                                'score': comment.score,
-                                'created_utc': comment.created_utc,
-                                'related_news': []
-                            }
-                            reactions.append(comment_data)
-                except Exception as e:
-                    logger.warning(f"Error processing comments for {post.title}: {str(e)}")
-                
-                # Rate limiting to avoid API issues
-                time.sleep(0.5)
         
-        logger.info(f"Found {len(reactions)} voice AI related items in r/{subreddit_name}")
+        logger.info(f"Found {len(reactions)} relevant items in r/{subreddit_name}")
         return reactions
+        
     except Exception as e:
         logger.error(f"Error processing subreddit {subreddit_name}: {str(e)}")
         return []
 
 async def scrape_reddit(news_items=None):
     """Scrape Reddit for voice AI content"""
-    logger.info("Starting Reddit scraper")
-    
-    # Initialize Reddit client
-    reddit = initialize_reddit()
+    reddit = await initialize_reddit()
     if not reddit:
-        logger.error("Failed to initialize Reddit client")
+        logger.warning("Reddit not available, returning empty results")
         return []
+    
+    logger.info(f"Starting Reddit scraping across {len(SUBREDDITS)} subreddits...")
     
     all_reactions = []
     
-    # Process each subreddit
-    for subreddit in SUBREDDITS:
+    # Process subreddits in smaller batches to avoid rate limiting
+    batch_size = 3
+    for i in range(0, len(SUBREDDITS), batch_size):
+        batch = SUBREDDITS[i:i + batch_size]
+        tasks = []
+        
+        for subreddit in batch:
+            task = asyncio.create_task(
+                asyncio.to_thread(process_subreddit, reddit, subreddit)
+            )
+            tasks.append(task)
+        
+        # Process batch
         try:
-            # Process in a separate thread since Reddit API is synchronous
-            reactions = await asyncio.to_thread(process_subreddit, reddit, subreddit)
-            all_reactions.extend(reactions)
-            
-            # Rate limiting between subreddits
-            await asyncio.sleep(1)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, list):
+                    all_reactions.extend(result)
+                else:
+                    logger.error(f"Task failed: {result}")
         except Exception as e:
-            logger.error(f"Error processing subreddit {subreddit}: {str(e)}")
+            logger.error(f"Error processing batch: {str(e)}")
+        
+        # Small delay between batches to be respectful to Reddit API
+        if i + batch_size < len(SUBREDDITS):
+            await asyncio.sleep(2)
     
-    # Match reactions to news items if provided
-    if news_items:
-        for reaction in all_reactions:
-            for news in news_items:
-                # Check if reaction mentions news title
-                if news['title'].lower() in reaction['content'].lower():
-                    reaction['related_news'].append(news['_id'])
+    # Sort by relevance score and recency
+    all_reactions.sort(key=lambda x: (x.get('relevance_score', 0), x.get('created_utc', 0)), reverse=True)
     
-    logger.info(f"Total Reddit reactions found: {len(all_reactions)}")
+    # Limit total results
+    all_reactions = all_reactions[:50]
+    
+    logger.info(f"Reddit scraping completed: {len(all_reactions)} total reactions found")
+    
+    # Log some examples
+    if all_reactions:
+        logger.info("Top Reddit findings:")
+        for i, reaction in enumerate(all_reactions[:3]):
+            logger.info(f"  {i+1}. r/{reaction['subreddit']}: {reaction.get('title', reaction.get('content', ''))[:80]}... (score: {reaction.get('relevance_score', 0)})")
+    
     return all_reactions
 
-async def test_reddit_scraper():
-    """Test the Reddit scraper functionality"""
-    logger.info("Testing Reddit scraper")
-    reactions = await scrape_reddit()
-    
-    print(f"\n{'='*60}")
-    print(f"Found {len(reactions)} voice AI related posts/comments on Reddit")
-    print(f"{'='*60}")
-    
-    for i, reaction in enumerate(reactions[:10]):  # Show first 10
-        print(f"\n{i+1}. r/{reaction['subreddit']} - {reaction['type']}")
-        if reaction['type'] == 'post':
-            print(f"   Title: {reaction['title']}")
-        print(f"   Content: {reaction['content'][:150]}...")
-        print(f"   URL: {reaction['url']}")
-        print(f"   Score: {reaction['score']}")
-    
-    return reactions
-
-if __name__ == "__main__":
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    # Run the test
-    asyncio.run(test_reddit_scraper())
+# For backward compatibility
+async def scrape_reddit_for_news(news_items):
+    """Legacy function name - calls the main scrape_reddit function"""
+    return await scrape_reddit(news_items)
