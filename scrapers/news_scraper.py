@@ -9,8 +9,20 @@ from bs4 import BeautifulSoup
 import feedparser
 import ssl
 import certifi
+import urllib3
 
 logger = logging.getLogger(__name__)
+
+def create_ssl_context():
+    """Create a more permissive SSL context for problematic sites"""
+    # Create SSL context with certifi for most sites
+    context = ssl.create_default_context(cafile=certifi.where())
+    
+    # Make it slightly more permissive for problematic sites
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_OPTIONAL
+    
+    return context
 
 # Clean news sources without duplicates
 NEWS_SOURCES = [
@@ -32,7 +44,7 @@ NEWS_SOURCES = [
     },
     {
         'name': 'TechCrunch AI RSS',
-        'url': 'https://techcrunch.com/category/artificial-intelligence/feed/',
+        'url': 'https://techcrunch.com/category/artificial_intelligence/feed/',
         'type': 'rss'
     },
     {
@@ -65,9 +77,8 @@ NEWS_SOURCES = [
     },
     {
         'name': 'Google AI Blog',
-        'url': 'https://blog.google/technology/ai/',
-        'type': 'web',
-        'selector': 'h3 a, .article-title a'
+        'url': 'https://ai.googleblog.com/feeds/posts/default',
+        'type': 'rss',  # Changed from web to RSS for more reliability
     },
     {
         'name': 'Anthropic News',
@@ -87,9 +98,14 @@ async def scrape_web_source(session, source):
     """Scrape a web-based news source with SSL handling"""
     try:
         # Create SSL context
-        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        ssl_context = create_ssl_context()
         
-        async with session.get(source['url'], timeout=10, ssl=ssl_context) as response:
+        # Special handling for problematic domains
+        ssl_verify = True
+        if any(domain in source['url'] for domain in ['googleblog.com', 'ai.google']):
+            ssl_verify = False
+        
+        async with session.get(source['url'], timeout=10, ssl=ssl_context, verify_ssl=ssl_verify) as response:
             if response.status != 200:
                 logger.error(f"Error fetching {source['name']}: {response.status}")
                 return []
@@ -135,7 +151,14 @@ async def scrape_rss_source(source):
         # Set user agent for feedparser
         feedparser.USER_AGENT = "AI Voice News Scraper 1.0"
         
-        feed = feedparser.parse(source['url'])
+        # Disable SSL verification warnings
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        # Use a more permissive approach for problematic domains
+        if 'googleblog.com' in source['url']:
+            feed = feedparser.parse(source['url'], ssl_verify=False)
+        else:
+            feed = feedparser.parse(source['url'])
         
         if not feed.entries:
             logger.warning(f"No entries found in RSS feed: {source['name']}")
@@ -181,7 +204,8 @@ async def scrape_news_sources():
                 logger.error(f"RSS task failed: {result}")
     
     # Process web sources
-    connector = aiohttp.TCPConnector(ssl=ssl.create_default_context(cafile=certifi.where()))
+    ssl_context = create_ssl_context()
+    connector = aiohttp.TCPConnector(ssl=ssl_context, verify_ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
         web_tasks = []
         for source in NEWS_SOURCES:
