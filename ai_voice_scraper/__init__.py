@@ -1,4 +1,4 @@
 """
-AI Voice News Scraper - Monitor AI voice technology news and community discussions
+AI Voice Scraper package for monitoring AI voice technology news and discussions
 """
-__version__ = '1.0.0'
+__version__ = '0.1.0'
