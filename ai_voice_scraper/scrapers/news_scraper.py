@@ -1,5 +1,5 @@
 """
-News scraper module for AI Voice News Scraper - Fixed version
+News scraper module for AI Voice News Scraper
 """
 import asyncio
 import logging
@@ -184,13 +184,16 @@ async def scrape_rss_source(source):
         logger.error(f"Error scraping RSS {source['name']}: {str(e)}")
         return []
 
-async def scrape_news_sources():
+async def scrape_news_sources(test_mode=False):
     """Scrape all configured news sources"""
     all_articles = []
     
+    # Limit sources in test mode
+    sources = NEWS_SOURCES[:3] if test_mode else NEWS_SOURCES
+    
     # Process RSS sources first (more reliable)
     rss_tasks = []
-    for source in NEWS_SOURCES:
+    for source in sources:
         if source['type'] == 'rss':
             rss_tasks.append(scrape_rss_source(source))
     
@@ -208,7 +211,7 @@ async def scrape_news_sources():
     connector = aiohttp.TCPConnector(ssl=ssl_context, verify_ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
         web_tasks = []
-        for source in NEWS_SOURCES:
+        for source in sources:
             if source['type'] == 'web':
                 web_tasks.append(scrape_web_source(session, source))
         
