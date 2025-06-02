@@ -206,29 +206,6 @@ Edit `templates/email_digest.html` for branded email designs.
 
 ---
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### Development Setup
-
-\`\`\`bash
-# Clone and setup
-git clone https://github.com/yourusername/ai-voice-news-scraper.git
-cd ai-voice-news-scraper
-
-# Install development dependencies
-pip install -r requirements-dev.txt
-
-# Run tests
-python -m pytest tests/
-
-# Format code
-black .
-\`\`\`
-
----
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
