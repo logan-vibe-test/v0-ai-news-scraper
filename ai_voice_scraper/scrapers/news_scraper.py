@@ -97,15 +97,7 @@ NEWS_SOURCES = [
 async def scrape_web_source(session, source):
     """Scrape a web-based news source with SSL handling"""
     try:
-        # Create SSL context
-        ssl_context = create_ssl_context()
-        
-        # Special handling for problematic domains
-        ssl_verify = True
-        if any(domain in source['url'] for domain in ['googleblog.com', 'ai.google']):
-            ssl_verify = False
-        
-        async with session.get(source['url'], timeout=10, ssl=ssl_context, verify_ssl=ssl_verify) as response:
+        async with session.get(source['url'], timeout=10) as response:
             if response.status != 200:
                 logger.error(f"Error fetching {source['name']}: {response.status}")
                 return []
@@ -206,9 +198,9 @@ async def scrape_news_sources(test_mode=False):
             else:
                 logger.error(f"RSS task failed: {result}")
     
-    # Process web sources
+    # Process web sources with simplified SSL handling
     ssl_context = create_ssl_context()
-    connector = aiohttp.TCPConnector(ssl=ssl_context, verify_ssl=False)
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
     async with aiohttp.ClientSession(connector=connector) as session:
         web_tasks = []
         for source in sources:
