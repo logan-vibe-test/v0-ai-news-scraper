@@ -51,15 +51,15 @@ async def main():
     
     logger.info(f"Processed {len(processed_items)} relevant articles")
     
-    # Step 3: Scrape Reddit (if configured)
+    # Step 3: Scrape Reddit (if configured) - now independent of news items
     reactions = []
     if os.getenv('REDDIT_CLIENT_ID') and os.getenv('REDDIT_CLIENT_SECRET'):
-        logger.info("💬 Scraping Reddit...")
+        logger.info("💬 Scraping Reddit for AI voice topics...")
         try:
-            reactions = await scrape_reddit(processed_items)
+            reactions = await scrape_reddit()  # No longer passing processed_items
             for reaction in reactions:
                 await store_reaction(reaction)
-            logger.info(f"Found {len(reactions)} Reddit reactions")
+            logger.info(f"Found {len(reactions)} Reddit posts about AI voice")
         except Exception as e:
             logger.error(f"Reddit scraping failed: {e}")
     
