@@ -1,5 +1,5 @@
 """
-Database manager for AI Voice News Scraper - Fixed version with fallback
+Database manager for AI Voice News Scraper - Fixed syntax error
 """
 import logging
 import os
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://localhost:27017')
 DB_NAME = os.getenv('DB_NAME', 'ai_voice_news')
 
-# Fallback to file storage if MongoDB is not available
+# Global variable for file storage fallback
 USE_FILE_STORAGE = False
 
 try:
@@ -29,24 +29,32 @@ try:
     # Collections
     news_collection = db['news_items']
     reactions_collection = db['reactions']
+    logger.info("MongoDB client initialized")
 except Exception as e:
     logger.warning(f"MongoDB not available, using file storage: {str(e)}")
     USE_FILE_STORAGE = True
-    # Create data directory
-    Path('data').mkdir(exist_ok=True)
+    client = None
+    db = None
+    news_collection = None
+    reactions_collection = None
+
+# Create data directory for file storage
+Path('data').mkdir(exist_ok=True)
 
 async def test_mongodb_connection():
     """Test if MongoDB is available"""
-    if USE_FILE_STORAGE:
+    global USE_FILE_STORAGE
+    
+    if USE_FILE_STORAGE or client is None:
         return False
     
     try:
         # Test connection
         await client.admin.command('ping')
+        logger.info("MongoDB connection successful")
         return True
     except Exception as e:
         logger.warning(f"MongoDB connection failed: {str(e)}")
-        global USE_FILE_STORAGE
         USE_FILE_STORAGE = True
         return False
 
@@ -81,7 +89,10 @@ async def store_news_item(news_item):
         
         news_item['stored_at'] = datetime.now().isoformat()
         
-        if USE_FILE_STORAGE or not await test_mongodb_connection():
+        # Check if we should use file storage
+        use_files = USE_FILE_STORAGE or not await test_mongodb_connection()
+        
+        if use_files:
             # Use file storage
             news_items = load_file_data('news_items')
             
@@ -128,7 +139,10 @@ async def store_reaction(reaction):
         
         reaction['stored_at'] = datetime.now().isoformat()
         
-        if USE_FILE_STORAGE or not await test_mongodb_connection():
+        # Check if we should use file storage
+        use_files = USE_FILE_STORAGE or not await test_mongodb_connection()
+        
+        if use_files:
             # Use file storage
             reactions = load_file_data('reactions')
             
@@ -175,7 +189,10 @@ async def get_recent_news(days=1):
     try:
         cutoff_date = datetime.now() - timedelta(days=days)
         
-        if USE_FILE_STORAGE or not await test_mongodb_connection():
+        # Check if we should use file storage
+        use_files = USE_FILE_STORAGE or not await test_mongodb_connection()
+        
+        if use_files:
             # Use file storage
             news_items = load_file_data('news_items')
             recent_items = []
@@ -207,7 +224,10 @@ async def get_recent_news(days=1):
 async def get_reactions_for_news(news_id):
     """Get reactions for a specific news item"""
     try:
-        if USE_FILE_STORAGE or not await test_mongodb_connection():
+        # Check if we should use file storage
+        use_files = USE_FILE_STORAGE or not await test_mongodb_connection()
+        
+        if use_files:
             # Use file storage
             reactions = load_file_data('reactions')
             related_reactions = [r for r in reactions if news_id in r.get('related_news', [])]
