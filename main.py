@@ -7,12 +7,14 @@ import os
 from datetime import datetime
 from dotenv import load_dotenv
 
+# Import components
 from scrapers.news_scraper import scrape_news_sources
 from scrapers.reddit_scraper import scrape_reddit
 from processors.content_processor import process_content
-from storage.db_manager import store_news_item, store_reaction
+from storage.db_manager import store_news_item, store_reaction, store_run_summary
 from notifiers.slack_notifier import send_slack_digest
 from notifiers.email_notifier import send_email_digest
+from processors.trends_analyzer import analyze_current_trends
 
 # Load environment variables
 load_dotenv()
