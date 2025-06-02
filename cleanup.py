@@ -80,10 +80,11 @@ def cleanup_codebase():
         "scrapers/twitter_scraper.py",
         "scrapers/twitter_scraper_improved.py",
 
-        # Redundant Reddit scrapers
+        # Redundant Reddit scrapers - remove ALL of them
         "scrapers/reddit_scraper_fixed.py",
         "scrapers/reddit_scraper_improved.py", 
         "scrapers/reddit_scraper_simple.py",
+        "scrapers/reddit_scraper_impl.py",
         "test_reddit_fix.py",
     ]
     
@@ -103,7 +104,6 @@ def cleanup_codebase():
         "scrapers/__init__.py": "ai_voice_scraper/scrapers/__init__.py",
         "scrapers/news_scraper.py": "ai_voice_scraper/scrapers/news_scraper.py",
         "scrapers/reddit_scraper.py": "ai_voice_scraper/scrapers/reddit_scraper.py",
-        "scrapers/reddit_scraper_fixed.py": "ai_voice_scraper/scrapers/reddit_scraper_impl.py",
         
         # Processors
         "processors/__init__.py": "ai_voice_scraper/processors/__init__.py",
