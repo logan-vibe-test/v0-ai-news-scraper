@@ -26,3 +26,10 @@ certifi>=2023.0.0
 # Notifications
 slack-sdk>=3.26.0
 jinja2>=3.1.0
+
+# Reddit scraping dependencies
+spacy>=3.4.0
+nltk>=3.8.0
+
+# Download spacy model (this will be handled in code)
+# python -m spacy download en_core_web_sm
