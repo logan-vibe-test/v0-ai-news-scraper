@@ -7,7 +7,6 @@ import praw
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
-from config.keywords import VOICE_AI_KEYWORDS, NEGATIVE_KEYWORDS
 
 # Load environment variables
 load_dotenv()
@@ -33,6 +32,40 @@ SUBREDDITS = [
     'MediaSynthesis',
     'compsci',
     'technology'
+]
+
+# Voice AI keywords for filtering (defined locally to avoid import issues)
+PRIMARY_VOICE_KEYWORDS = [
+    'voice ai', 'text-to-speech', 'tts', 'speech synthesis',
+    'voice synthesis', 'voice model', 'voice generation',
+    'elevenlabs', 'openai voice', 'audio generation',
+    'voice cloning', 'speech generation', 'voice assistant',
+    'eleven labs', 'whisper', 'voice clone', 'synthetic voice',
+    'ai voice', 'neural voice', 'voice bot'
+]
+
+SECONDARY_VOICE_KEYWORDS = [
+    'speech', 'audio', 'voice', 'speaking', 'pronunciation',
+    'accent', 'intonation', 'prosody', 'phoneme', 'vocoder',
+    'neural voice', 'ai voice', 'voice over', 'voiceover'
+]
+
+COMPANY_KEYWORDS = [
+    'eleven labs', 'elevenlabs', 'murf', 'speechify', 'descript',
+    'resemble', 'replica', 'tortoise tts', 'bark', 'coqui',
+    'festival', 'espeak', 'mary tts', 'wellsaid', 'lovo'
+]
+
+TECHNICAL_KEYWORDS = [
+    'mel spectrogram', 'vocoder', 'griffin lim', 'wavenet',
+    'tacotron', 'fastspeech', 'glow tts', 'neural vocoder',
+    'autoregressive', 'transformer', 'diffusion', 'flow'
+]
+
+NEGATIVE_KEYWORDS = [
+    'music generation', 'image generation', 'video generation',
+    'text generation', 'code generation', 'voice actor',
+    'voice actress', 'singing voice', 'music voice'
 ]
 
 async def initialize_reddit():
@@ -61,57 +94,27 @@ def calculate_relevance_score(text):
     score = 0
     
     # Primary voice AI keywords (high weight)
-    primary_keywords = [
-        'voice ai', 'text-to-speech', 'tts', 'speech synthesis',
-        'voice synthesis', 'voice model', 'voice generation',
-        'elevenlabs', 'openai voice', 'audio generation',
-        'voice cloning', 'speech generation', 'voice assistant'
-    ]
-    
-    for keyword in primary_keywords:
+    for keyword in PRIMARY_VOICE_KEYWORDS:
         if keyword in text_lower:
             score += 10
     
     # Secondary keywords (medium weight)
-    secondary_keywords = [
-        'whisper', 'speech', 'audio', 'voice', 'speaking',
-        'pronunciation', 'accent', 'intonation', 'prosody',
-        'phoneme', 'vocoder', 'neural voice', 'ai voice'
-    ]
-    
-    for keyword in secondary_keywords:
+    for keyword in SECONDARY_VOICE_KEYWORDS:
         if keyword in text_lower:
             score += 3
     
     # Company/product keywords (medium weight)
-    company_keywords = [
-        'eleven labs', 'murf', 'speechify', 'descript',
-        'resemble', 'replica', 'tortoise tts', 'bark',
-        'coqui', 'festival', 'espeak', 'mary tts'
-    ]
-    
-    for keyword in company_keywords:
+    for keyword in COMPANY_KEYWORDS:
         if keyword in text_lower:
             score += 5
     
     # Technical terms (low weight)
-    technical_keywords = [
-        'mel spectrogram', 'vocoder', 'griffin lim',
-        'wavenet', 'tacotron', 'fastspeech', 'glow tts',
-        'neural vocoder', 'autoregressive', 'transformer'
-    ]
-    
-    for keyword in technical_keywords:
+    for keyword in TECHNICAL_KEYWORDS:
         if keyword in text_lower:
             score += 2
     
     # Negative keywords (reduce score)
-    negative_keywords = [
-        'music generation', 'image generation', 'video generation',
-        'text generation', 'code generation', 'unrelated'
-    ]
-    
-    for keyword in negative_keywords:
+    for keyword in NEGATIVE_KEYWORDS:
         if keyword in text_lower:
             score -= 5
     
