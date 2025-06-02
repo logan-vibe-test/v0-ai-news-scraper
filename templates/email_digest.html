@@ -25,19 +25,61 @@
             border-bottom: 3px solid #3498db;
             padding-bottom: 10px;
             margin-bottom: 30px;
+            text-align: center;
         }
         h2 {
             color: #3498db;
             margin-top: 30px;
             margin-bottom: 20px;
         }
+        .executive-summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .executive-summary h2 {
+            color: white;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .stats {
+            background-color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            text-align: center;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            margin: 10px;
+            min-width: 120px;
+        }
+        .stat-number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #3498db;
+            display: block;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
         .news-item {
             margin-bottom: 30px;
             border-left: 4px solid #3498db;
-            padding-left: 20px;
             background-color: #f8f9fa;
             padding: 20px;
             border-radius: 0 8px 8px 0;
+            transition: transform 0.2s ease;
+        }
+        .news-item:hover {
+            transform: translateX(5px);
         }
         .news-title {
             font-size: 18px;
@@ -55,17 +97,49 @@
             font-size: 14px;
             color: #7f8c8d;
             margin-bottom: 12px;
+            font-weight: 500;
         }
         .news-summary {
             font-size: 16px;
             line-height: 1.6;
         }
-        .stats {
-            background-color: #ecf0f1;
+        .reddit-section {
+            background: linear-gradient(135deg, #ff4500 0%, #ff6b35 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin-top: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .reddit-section h2 {
+            color: white;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .reddit-post {
+            background-color: rgba(255,255,255,0.15);
             padding: 15px;
             border-radius: 8px;
-            margin-bottom: 20px;
-            text-align: center;
+            margin-bottom: 15px;
+            border-left: 3px solid rgba(255,255,255,0.3);
+        }
+        .reddit-post:last-child {
+            margin-bottom: 0;
+        }
+        .reddit-meta {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+        .reddit-title {
+            font-weight: 500;
+        }
+        .reddit-title a {
+            color: white;
+            text-decoration: none;
+        }
+        .reddit-title a:hover {
+            text-decoration: underline;
         }
         .footer {
             margin-top: 40px;
@@ -79,6 +153,13 @@
             font-size: 24px;
             margin-right: 10px;
         }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #ffc107;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -86,12 +167,34 @@
         <h1><span class="emoji">🔊</span>AI Voice News Digest - {{ date }}</h1>
         
         <div class="stats">
-            <strong>{{ news_items|length }} Voice AI Articles Found</strong>
+            <div class="stat-item">
+                <span class="stat-number">{{ total_articles_found or news_items|length }}</span>
+                <div class="stat-label">Articles Found</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">{{ top_articles|length or news_items|length }}</span>
+                <div class="stat-label">Top Articles</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">{{ total_reddit_posts or reactions|length }}</span>
+                <div class="stat-label">Reddit Posts</div>
+            </div>
         </div>
         
-        {% if news_items %}
-            <h2>📰 Latest Voice AI News</h2>
-            {% for item in news_items %}
+        {% if executive_summary %}
+        <div class="executive-summary">
+            <h2>📊 Executive Summary</h2>
+            {% for paragraph in executive_summary.split('\n\n') %}
+                {% if paragraph.strip() %}
+                <p>{{ paragraph.strip() }}</p>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        {% if top_articles or news_items %}
+            <h2>🏆 Top {{ (top_articles or news_items)|length }} Voice AI Articles</h2>
+            {% for item in (top_articles or news_items) %}
             <div class="news-item">
                 <div class="news-title">
                     <a href="{{ item.url }}" target="_blank">{{ item.title }}</a>
@@ -104,6 +207,13 @@
                 </div>
             </div>
             {% endfor %}
+            
+            {% if total_articles_found and total_articles_found > (top_articles or news_items)|length %}
+            <div class="highlight">
+                <strong>📈 Additional Coverage:</strong> Found {{ total_articles_found }} total articles today. 
+                Showing the top {{ (top_articles or news_items)|length }} most relevant to voice AI technology.
+            </div>
+            {% endif %}
         {% else %}
             <div class="news-item">
                 <p>No voice AI news found today. The scraper will continue monitoring for updates.</p>
@@ -111,29 +221,27 @@
         {% endif %}
         
         {% if reactions %}
-            <h2>💬 Community Reactions</h2>
-            {% for platform, platform_reactions in reactions_by_platform.items() %}
-            <h3>{{ platform|capitalize }}</h3>
-            {% for reaction in platform_reactions[:3] %}
-            <div class="reaction">
-                {% if reaction.platform == 'reddit' %}
-                <div class="reaction-meta">
-                    <a href="{{ reaction.url }}" target="_blank">r/{{ reaction.subreddit }}</a> • {{ reaction.score }} points
+        <div class="reddit-section">
+            <h2>💬 Community Discussions</h2>
+            {% for reaction in reactions[:5] %}
+            <div class="reddit-post">
+                <div class="reddit-meta">
+                    <strong>r/{{ reaction.subreddit }}</strong> • {{ reaction.score }} points • {{ reaction.num_comments }} comments
                 </div>
-                {% else %}
-                <div class="reaction-meta">
-                    <a href="{{ reaction.url }}" target="_blank">Tweet</a> • {{ reaction.like_count }} likes
+                <div class="reddit-title">
+                    <a href="{{ reaction.url }}" target="_blank">
+                        {{ reaction.title or reaction.content[:100] }}{% if reaction.content|length > 100 %}...{% endif %}
+                    </a>
                 </div>
-                {% endif %}
-                <div class="reaction-content">{{ reaction.content[:200] }}...</div>
             </div>
             {% endfor %}
-            {% endfor %}
+        </div>
         {% endif %}
         
         <div class="footer">
-            <p>Generated by AI Voice News Scraper on {{ date }}</p>
-            <p>This digest focuses specifically on voice AI technology news and updates.</p>
+            <p><strong>Generated by AI Voice News Scraper</strong> on {{ date }}</p>
+            <p>This digest focuses specifically on voice AI technology news and community insights.</p>
+            <p><em>Stay ahead of the voice AI revolution with daily curated updates.</em></p>
         </div>
     </div>
 </body>
