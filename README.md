@@ -89,11 +89,10 @@ An automated intelligence platform that monitors the rapidly evolving AI voice t
 
 Create a `.env` file with the following required settings:
 
-\`\`\`env
-# OpenAI API (Required)
+### OpenAI API (Required)
 OPENAI_API_KEY=sk-your-openai-api-key-here
 
-# Email Configuration (Required)
+### Email Configuration (Required)
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=your-email@gmail.com
@@ -101,11 +100,11 @@ SMTP_PASSWORD=your-app-password
 EMAIL_FROM=your-email@gmail.com
 EMAIL_TO=recipient@gmail.com
 
-# Reddit API (Highly Recommended)
+### Reddit API (Highly Recommended)
 REDDIT_CLIENT_ID=your-reddit-client-id
 REDDIT_CLIENT_SECRET=your-reddit-client-secret
 
-# Database (Optional - uses file storage if not provided)
+### Database (Optional - uses file storage if not provided)
 MONGODB_URI=mongodb://localhost:27017/ai_voice_news
 
 # Slack Notifications (Optional)
