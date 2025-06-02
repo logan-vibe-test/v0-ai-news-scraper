@@ -68,8 +68,8 @@ NEGATIVE_KEYWORDS = [
     'voice actress', 'singing voice', 'music voice'
 ]
 
-async def initialize_reddit():
-    """Initialize Reddit API client"""
+def initialize_reddit():
+    """Initialize Reddit API client (synchronous)"""
     if not all([REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET]):
         logger.error("Reddit API credentials not configured")
         return None
@@ -145,8 +145,8 @@ def is_relevant_to_voice_ai(post_or_comment, min_score=5):
         logger.warning(f"Error checking relevance: {str(e)}")
         return False, 0
 
-async def process_subreddit(reddit, subreddit_name, time_filter='day', limit=100):
-    """Process a single subreddit for voice AI content"""
+def process_subreddit(reddit, subreddit_name, time_filter='day', limit=50):
+    """Process a single subreddit for voice AI content (synchronous)"""
     try:
         subreddit = reddit.subreddit(subreddit_name)
         reactions = []
@@ -164,7 +164,12 @@ async def process_subreddit(reddit, subreddit_name, time_filter='day', limit=100
         
         for source_name, posts in post_sources:
             try:
+                post_count = 0
                 for post in posts:
+                    post_count += 1
+                    if post_count > limit//3:  # Limit posts per source
+                        break
+                        
                     # Skip if already processed
                     if post.url in processed_urls:
                         continue
@@ -197,12 +202,18 @@ async def process_subreddit(reddit, subreddit_name, time_filter='day', limit=100
                         }
                         
                         reactions.append(post_data)
+                        logger.info(f"Found relevant post in r/{subreddit_name}: {post.title[:60]}... (score: {score})")
                         
                         # Get top comments for highly relevant posts
                         if score >= 15 and post.num_comments > 0:
                             try:
                                 post.comments.replace_more(limit=0)
+                                comment_count = 0
                                 for comment in post.comments.list()[:5]:  # Top 5 comments
+                                    comment_count += 1
+                                    if comment_count > 5:
+                                        break
+                                        
                                     if len(comment.body) > 50:  # Skip very short comments
                                         comment_relevant, comment_score = is_relevant_to_voice_ai(comment, min_score=3)
                                         
@@ -225,10 +236,10 @@ async def process_subreddit(reddit, subreddit_name, time_filter='day', limit=100
                                 logger.warning(f"Error processing comments for post {post.id}: {str(e)}")
                         
                         # Limit to prevent too many results from one subreddit
-                        if len(reactions) >= 20:
+                        if len(reactions) >= 10:
                             break
                 
-                if len(reactions) >= 20:
+                if len(reactions) >= 10:
                     break
                     
             except Exception as e:
@@ -244,7 +255,7 @@ async def process_subreddit(reddit, subreddit_name, time_filter='day', limit=100
 
 async def scrape_reddit(news_items=None):
     """Scrape Reddit for voice AI content"""
-    reddit = await initialize_reddit()
+    reddit = initialize_reddit()
     if not reddit:
         logger.warning("Reddit not available, returning empty results")
         return []
@@ -260,6 +271,7 @@ async def scrape_reddit(news_items=None):
         tasks = []
         
         for subreddit in batch:
+            # Use asyncio.to_thread to run the synchronous function in a thread
             task = asyncio.create_task(
                 asyncio.to_thread(process_subreddit, reddit, subreddit)
             )
@@ -271,8 +283,10 @@ async def scrape_reddit(news_items=None):
             for result in results:
                 if isinstance(result, list):
                     all_reactions.extend(result)
+                elif isinstance(result, Exception):
+                    logger.error(f"Task failed with exception: {result}")
                 else:
-                    logger.error(f"Task failed: {result}")
+                    logger.error(f"Task failed with unexpected result: {result}")
         except Exception as e:
             logger.error(f"Error processing batch: {str(e)}")
         
@@ -293,6 +307,8 @@ async def scrape_reddit(news_items=None):
         logger.info("Top Reddit findings:")
         for i, reaction in enumerate(all_reactions[:3]):
             logger.info(f"  {i+1}. r/{reaction['subreddit']}: {reaction.get('title', reaction.get('content', ''))[:80]}... (score: {reaction.get('relevance_score', 0)})")
+    else:
+        logger.info("No voice AI content found in recent Reddit posts")
     
     return all_reactions
 
