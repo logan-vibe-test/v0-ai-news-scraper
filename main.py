@@ -37,7 +37,7 @@ async def run_pipeline(logger):
         from processors.content_processor import process_content
         from storage.db_manager import store_news_item, store_reaction, store_run_summary
         from notifiers.slack_notifier import send_slack_digest
-        from notifiers.email_notifier import send_email_digest
+        from notifiers.email_notifier import send_email_digest  # Fixed import
         from processors.trends_analyzer import analyze_current_trends
     except ImportError as e:
         logger.error(f"Import error: {e}")
