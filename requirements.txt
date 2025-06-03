@@ -8,7 +8,7 @@ feedparser>=6.0.0
 langchain>=0.1.0
 langchain-community>=0.0.10
 langchain-openai>=0.0.2
-openai>=1.6.1,&lt;2.0.0
+openai>=1.6.1,<2.0.0
 
 # Database (optional)
 motor>=3.3.0
