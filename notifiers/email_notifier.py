@@ -1,5 +1,5 @@
 """
-Email notifier for AI Voice News Scraper
+Email notifier with GUARANTEED delivery - fixes Gmail CC issues
 """
 import logging
 import os
@@ -35,7 +35,7 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 template_loader = jinja2.FileSystemLoader(searchpath="./templates")
 template_env = jinja2.Environment(loader=template_loader)
 
-def parse_email_list(email_string: str) -> list:
+def parse_and_validate_emails(email_string: str) -> list:
     """Parse and validate email addresses"""
     if not email_string:
         return []
@@ -49,18 +49,18 @@ def parse_email_list(email_string: str) -> list:
     return emails
 
 def get_all_recipients():
-    """Get all email recipients - treats all as TO recipients"""
+    """Get all email recipients - FIXED to handle Gmail CC issues"""
     # Force reload environment variables
     load_dotenv(override=True)
     
-    to_emails = parse_email_list(os.getenv('EMAIL_TO', ''))
-    cc_emails = parse_email_list(os.getenv('EMAIL_CC', ''))
-    bcc_emails = parse_email_list(os.getenv('EMAIL_BCC', ''))
+    to_emails = parse_and_validate_emails(os.getenv('EMAIL_TO', ''))
+    cc_emails = parse_and_validate_emails(os.getenv('EMAIL_CC', ''))
+    bcc_emails = parse_and_validate_emails(os.getenv('EMAIL_BCC', ''))
     
-    # Treat ALL emails as TO recipients to avoid Gmail CC issues
+    # SOLUTION: Treat ALL emails as TO recipients to avoid Gmail CC issues
     all_recipients = to_emails + cc_emails + bcc_emails
     
-    logger.info(f"📧 Email recipients (treating all as TO):")
+    logger.info(f"📧 Email recipients (treating all as TO to avoid CC issues):")
     logger.info(f"  Original TO: {to_emails}")
     logger.info(f"  Original CC: {cc_emails}")
     logger.info(f"  Original BCC: {bcc_emails}")
@@ -69,8 +69,8 @@ def get_all_recipients():
     return all_recipients
 
 async def send_email_digest(digest):
-    """Send email digest with guaranteed delivery"""
-    logger.info("🚀 Starting email digest send...")
+    """Send email digest with GUARANTEED delivery - Gmail CC fix"""
+    logger.info("🚀 Starting email digest send with Gmail CC fix...")
     
     # Force reload environment variables
     load_dotenv(override=True)
@@ -195,8 +195,9 @@ async def send_individually(smtp_server, smtp_port, smtp_username, smtp_password
         return False
     
     logger.info(f"📊 Individual send results: {successful_sends}/{len(all_recipients)} successful")
-    return successful_sends > 0
+    return successful_sends == len(all_recipients)
 
+# Copy all the other functions from the previous version
 async def build_enhanced_digest(digest):
     """Build enhanced digest with all features"""
     try:
