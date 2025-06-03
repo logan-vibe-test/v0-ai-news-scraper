@@ -1,5 +1,5 @@
 """
-Email notifier for AI Voice News Scraper - Enhanced with trends analysis
+Email notifier for AI Voice News Scraper - Fixed multiple recipients
 """
 import logging
 import os
@@ -18,18 +18,41 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Email configuration
+# Email configuration with multiple recipient support
 SMTP_SERVER = os.getenv('SMTP_SERVER')
 SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
 SMTP_USERNAME = os.getenv('SMTP_USERNAME')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
 EMAIL_FROM = os.getenv('EMAIL_FROM')
-EMAIL_TO = os.getenv('EMAIL_TO')
+
+# Support multiple recipients
+EMAIL_TO = os.getenv('EMAIL_TO', '')
+EMAIL_CC = os.getenv('EMAIL_CC', '')  # Optional CC recipients
+EMAIL_BCC = os.getenv('EMAIL_BCC', '')  # Optional BCC recipients
+
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Jinja2 template environment
 template_loader = jinja2.FileSystemLoader(searchpath="./templates")
 template_env = jinja2.Environment(loader=template_loader)
+
+def parse_email_list(email_string: str) -> list:
+    """Parse comma-separated email addresses with better validation"""
+    if not email_string:
+        return []
+    
+    emails = []
+    # Split by comma and clean up each email
+    for email in email_string.split(','):
+        email = email.strip()
+        # Basic email validation
+        if email and '@' in email and '.' in email.split('@')[1]:
+            emails.append(email)
+            logger.debug(f"Added email: {email}")
+        elif email:
+            logger.warning(f"Invalid email format skipped: {email}")
+    
+    return emails
 
 async def generate_executive_summary(news_items, reactions):
     """Generate an executive summary of the voice AI landscape"""
@@ -147,9 +170,26 @@ def calculate_sentiment_summary(reactions):
     return sentiment_counts, subreddit_activity
 
 async def send_email_digest(digest):
-    """Send a digest via email with executive summary and trends analysis"""
-    if not all([SMTP_SERVER, SMTP_USERNAME, SMTP_PASSWORD, EMAIL_FROM, EMAIL_TO]):
+    """Send a digest via email with FIXED multiple recipient support"""
+    if not all([SMTP_SERVER, SMTP_USERNAME, SMTP_PASSWORD, EMAIL_FROM]):
         logger.error("Email configuration not complete")
+        return False
+    
+    # Parse recipient lists with detailed logging
+    logger.info(f"Raw EMAIL_TO: '{EMAIL_TO}'")
+    logger.info(f"Raw EMAIL_CC: '{EMAIL_CC}'")
+    logger.info(f"Raw EMAIL_BCC: '{EMAIL_BCC}'")
+    
+    to_emails = parse_email_list(EMAIL_TO)
+    cc_emails = parse_email_list(EMAIL_CC)
+    bcc_emails = parse_email_list(EMAIL_BCC)
+    
+    logger.info(f"Parsed TO emails: {to_emails}")
+    logger.info(f"Parsed CC emails: {cc_emails}")
+    logger.info(f"Parsed BCC emails: {bcc_emails}")
+    
+    if not to_emails:
+        logger.error("No valid TO email addresses configured")
         return False
     
     try:
@@ -201,28 +241,57 @@ async def send_email_digest(digest):
             }
         }
         
-        # Create message
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = f"🔊 AI Voice News Digest - {digest['date']}"
-        msg['From'] = EMAIL_FROM
-        msg['To'] = EMAIL_TO
-        
         # Create HTML content
         html_content = format_digest_for_email(enhanced_digest)
         
-        # Attach parts
-        msg.attach(MIMEText(html_content, 'html'))
+        # Combine all recipients for actual sending
+        all_recipients = to_emails + cc_emails + bcc_emails
+        logger.info(f"Total recipients for sending: {len(all_recipients)}")
+        logger.info(f"All recipients: {all_recipients}")
         
-        # Send email
+        # Send email using SMTP with proper recipient handling
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
             server.starttls()
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            server.send_message(msg)
+            
+            # Create message for each batch to ensure proper delivery
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = f"🔊 AI Voice News Digest - {digest['date']}"
+            msg['From'] = EMAIL_FROM
+            
+            # Set headers properly
+            if to_emails:
+                msg['To'] = ', '.join(to_emails)
+            if cc_emails:
+                msg['Cc'] = ', '.join(cc_emails)
+            # Note: BCC recipients are not added to headers (that's the point of BCC)
+            
+            # Attach HTML content
+            msg.attach(MIMEText(html_content, 'html'))
+            
+            # Send to ALL recipients (TO + CC + BCC)
+            logger.info(f"Sending email to {len(all_recipients)} recipients...")
+            
+            # Use sendmail with explicit recipient list
+            text = msg.as_string()
+            server.sendmail(EMAIL_FROM, all_recipients, text)
+            
+            logger.info("✅ Email sent successfully!")
         
-        logger.info(f"Sent enhanced email digest with trends to {EMAIL_TO}")
+        # Log detailed recipient information
+        logger.info(f"📧 Email delivery summary:")
+        logger.info(f"   TO recipients ({len(to_emails)}): {', '.join(to_emails)}")
+        if cc_emails:
+            logger.info(f"   CC recipients ({len(cc_emails)}): {', '.join(cc_emails)}")
+        if bcc_emails:
+            logger.info(f"   BCC recipients ({len(bcc_emails)}): {', '.join(bcc_emails)}")
+        logger.info(f"   Total sent to: {len(all_recipients)} recipients")
+        
         return True
+        
     except Exception as e:
         logger.error(f"Error sending email digest: {str(e)}")
+        logger.error(f"Failed recipients: {all_recipients if 'all_recipients' in locals() else 'Unknown'}")
         return False
 
 def format_digest_for_email(digest):
@@ -230,504 +299,37 @@ def format_digest_for_email(digest):
     try:
         # Try to load the template
         template = template_env.get_template('email_digest.html')
+        
+        # Group reactions by platform for the template
+        reactions_by_platform = {}
+        for reaction in digest.get('reactions', []):
+            platform = reaction['platform']
+            if platform not in reactions_by_platform:
+                reactions_by_platform[platform] = []
+            reactions_by_platform[platform].append(reaction)
+        
+        # Render the template
+        return template.render(
+            date=digest['date'],
+            news_items=digest.get('news_items', []),
+            top_articles=digest.get('top_articles', []),
+            reactions=digest.get('reactions', []),
+            reactions_by_platform=reactions_by_platform,
+            executive_summary=digest.get('executive_summary', ''),
+            total_articles_found=digest.get('total_articles_found', 0),
+            total_reddit_posts=digest.get('total_reddit_posts', 0),
+            trends=digest.get('trends', {}),
+            processing_stats=digest.get('processing_stats', {})
+        )
+        
     except jinja2.exceptions.TemplateNotFound:
-        # If template doesn't exist, use an enhanced inline template with trends
-        template_str = """
-        <!DOCTYPE html>
+        logger.warning("Email template not found, using fallback")
+        return f"""
         <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>AI Voice News Digest</title>
-            <style>
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    line-height: 1.6;
-                    color: #333;
-                    max-width: 800px;
-                    margin: 0 auto;
-                    padding: 20px;
-                    background-color: #f8f9fa;
-                }
-                .container {
-                    background-color: white;
-                    border-radius: 8px;
-                    padding: 30px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                }
-                h1 {
-                    color: #2c3e50;
-                    border-bottom: 3px solid #3498db;
-                    padding-bottom: 10px;
-                    margin-bottom: 30px;
-                    text-align: center;
-                }
-                h2 {
-                    color: #3498db;
-                    margin-top: 30px;
-                    margin-bottom: 20px;
-                }
-                h3 {
-                    color: #e74c3c;
-                    margin-top: 25px;
-                    margin-bottom: 15px;
-                    border-left: 4px solid #e74c3c;
-                    padding-left: 15px;
-                }
-                .executive-summary {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    padding: 25px;
-                    border-radius: 10px;
-                    margin-bottom: 30px;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-                }
-                .executive-summary h2 {
-                    color: white;
-                    margin-top: 0;
-                    margin-bottom: 15px;
-                }
-                .trends-section {
-                    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                    color: white;
-                    padding: 25px;
-                    border-radius: 10px;
-                    margin-bottom: 30px;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-                }
-                .trends-section h2 {
-                    color: white;
-                    margin-top: 0;
-                    margin-bottom: 15px;
-                }
-                .trend-item {
-                    background-color: rgba(255,255,255,0.15);
-                    padding: 15px;
-                    border-radius: 8px;
-                    margin-bottom: 15px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-                .trend-label {
-                    font-weight: bold;
-                }
-                .trend-value {
-                    font-size: 18px;
-                }
-                .insights-list {
-                    list-style: none;
-                    padding: 0;
-                }
-                .insights-list li {
-                    background-color: rgba(255,255,255,0.1);
-                    padding: 10px;
-                    margin-bottom: 8px;
-                    border-radius: 5px;
-                }
-                .stats {
-                    background-color: #ecf0f1;
-                    padding: 20px;
-                    border-radius: 8px;
-                    margin-bottom: 30px;
-                    text-align: center;
-                    display: flex;
-                    justify-content: space-around;
-                    flex-wrap: wrap;
-                }
-                .stat-item {
-                    margin: 10px;
-                    min-width: 120px;
-                }
-                .stat-number {
-                    font-size: 28px;
-                    font-weight: bold;
-                    color: #3498db;
-                    display: block;
-                }
-                .stat-label {
-                    font-size: 14px;
-                    color: #7f8c8d;
-                    margin-top: 5px;
-                }
-                .news-item {
-                    margin-bottom: 30px;
-                    border-left: 4px solid #3498db;
-                    background-color: #f8f9fa;
-                    padding: 20px;
-                    border-radius: 0 8px 8px 0;
-                    transition: transform 0.2s ease;
-                }
-                .news-item:hover {
-                    transform: translateX(5px);
-                }
-                .news-title {
-                    font-size: 18px;
-                    font-weight: bold;
-                    margin-bottom: 8px;
-                }
-                .news-title a {
-                    color: #2c3e50;
-                    text-decoration: none;
-                }
-                .news-title a:hover {
-                    color: #3498db;
-                }
-                .news-meta {
-                    font-size: 14px;
-                    color: #7f8c8d;
-                    margin-bottom: 12px;
-                    font-weight: 500;
-                }
-                .news-summary {
-                    font-size: 16px;
-                    line-height: 1.6;
-                }
-                .reddit-section {
-                    background: linear-gradient(135deg, #ff4500 0%, #ff6b35 100%);
-                    color: white;
-                    padding: 25px;
-                    border-radius: 10px;
-                    margin-top: 30px;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-                }
-                .reddit-section h2 {
-                    color: white;
-                    margin-top: 0;
-                    margin-bottom: 20px;
-                }
-                .reddit-subreddit {
-                    margin-bottom: 25px;
-                }
-                .reddit-subreddit h3 {
-                    color: white;
-                    border-left: 4px solid rgba(255,255,255,0.5);
-                    margin-bottom: 15px;
-                    font-size: 18px;
-                }
-                .reddit-post {
-                    background-color: rgba(255,255,255,0.15);
-                    padding: 15px;
-                    border-radius: 8px;
-                    margin-bottom: 15px;
-                    border-left: 3px solid rgba(255,255,255,0.3);
-                }
-                .reddit-post:last-child {
-                    margin-bottom: 0;
-                }
-                .reddit-post.positive {
-                    border-left-color: #2ecc71;
-                    background-color: rgba(46, 204, 113, 0.1);
-                }
-                .reddit-post.negative {
-                    border-left-color: #e74c3c;
-                    background-color: rgba(231, 76, 60, 0.1);
-                }
-                .reddit-post.neutral {
-                    border-left-color: #95a5a6;
-                    background-color: rgba(149, 165, 166, 0.1);
-                }
-                .reddit-meta {
-                    font-size: 14px;
-                    opacity: 0.9;
-                    margin-bottom: 8px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-                .sentiment-indicator {
-                    font-size: 16px;
-                    font-weight: bold;
-                    padding: 4px 8px;
-                    border-radius: 12px;
-                    background-color: rgba(255,255,255,0.2);
-                }
-                .reddit-title {
-                    font-weight: 500;
-                    margin-bottom: 8px;
-                }
-                .reddit-title a {
-                    color: white;
-                    text-decoration: none;
-                }
-                .reddit-title a:hover {
-                    text-decoration: underline;
-                }
-                .reddit-summary {
-                    font-size: 14px;
-                    opacity: 0.9;
-                    font-style: italic;
-                    margin-bottom: 8px;
-                }
-                .reddit-links {
-                    font-size: 12px;
-                    opacity: 0.8;
-                }
-                .reddit-links a {
-                    color: white;
-                    margin-right: 10px;
-                }
-                .footer {
-                    margin-top: 40px;
-                    padding-top: 20px;
-                    border-top: 1px solid #ecf0f1;
-                    font-size: 14px;
-                    color: #7f8c8d;
-                    text-align: center;
-                }
-                .emoji {
-                    font-size: 24px;
-                    margin-right: 10px;
-                }
-                .highlight {
-                    background-color: #fff3cd;
-                    padding: 15px;
-                    border-radius: 5px;
-                    border-left: 4px solid #ffc107;
-                    margin-bottom: 20px;
-                }
-                .sentiment-summary {
-                    background-color: rgba(255,255,255,0.2);
-                    padding: 10px;
-                    border-radius: 5px;
-                    margin-bottom: 15px;
-                    font-size: 14px;
-                }
-                .processing-summary {
-                    background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
-                    color: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                    margin-bottom: 30px;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-                }
-                .processing-summary h3 {
-                    color: white;
-                    margin-top: 0;
-                    margin-bottom: 15px;
-                    border-left: 4px solid rgba(255,255,255,0.5);
-                    padding-left: 15px;
-                }
-                .summary-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                    gap: 15px;
-                }
-                .summary-item {
-                    background-color: rgba(255,255,255,0.15);
-                    padding: 15px;
-                    border-radius: 8px;
-                    border-left: 3px solid rgba(255,255,255,0.5);
-                }
-                .summary-item strong {
-                    color: #fff;
-                    font-size: 18px;
-                }
-            </style>
-        </head>
         <body>
-            <div class="container">
-                <h1><span class="emoji">🔊</span>AI Voice News Digest - {{ date }}</h1>
-                
-                <div class="stats">
-                    <div class="stat-item">
-                        <span class="stat-number">{{ total_articles_found or processing_stats.articles_found or news_items|length }}</span>
-                        <div class="stat-label">Articles Found</div>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-number">{{ total_articles_relevant or processing_stats.articles_relevant or top_articles|length }}</span>
-                        <div class="stat-label">Relevant Articles</div>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-number">{{ total_reddit_posts_scanned or processing_stats.reddit_scanned or 0 }}</span>
-                        <div class="stat-label">Reddit Posts Scanned</div>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-number">{{ total_reddit_posts_included or processing_stats.reddit_included or reactions|length }}</span>
-                        <div class="stat-label">Reddit Posts Included</div>
-                    </div>
-                    {% if processing_stats and processing_stats.relevance_rate %}
-                    <div class="stat-item">
-                        <span class="stat-number">{{ processing_stats.relevance_rate }}%</span>
-                        <div class="stat-label">Relevance Rate</div>
-                    </div>
-                    {% endif %}
-                </div>
-
-                {% if processing_stats %}
-                <div class="processing-summary">
-                    <h3>📊 Processing Summary</h3>
-                    <div class="summary-grid">
-                        <div class="summary-item">
-                            <strong>{{ processing_stats.articles_found }}</strong> articles discovered from news sources
-                        </div>
-                        <div class="summary-item">
-                            <strong>{{ processing_stats.articles_relevant }}</strong> articles relevant to voice AI ({{ processing_stats.relevance_rate }}% relevance rate)
-                        </div>
-                        <div class="summary-item">
-                            <strong>{{ processing_stats.reddit_scanned }}</strong> Reddit posts scanned across target subreddits
-                        </div>
-                        <div class="summary-item">
-                            <strong>{{ processing_stats.reddit_included }}</strong> Reddit posts included (voice AI related)
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-                
-                {% if trends and trends.available %}
-                <div class="trends-section">
-                    <h2>📊 Trends Analysis (Last {{ trends.runs_analyzed }} Runs)</h2>
-                    <p><strong>Period:</strong> {{ trends.date_range }}</p>
-                    
-                    <div class="trend-item">
-                        <span class="trend-label">Community Sentiment</span>
-                        <span class="trend-value">{{ trends.sentiment.emoji }} {{ trends.sentiment.trend.title() }}</span>
-                    </div>
-                    
-                    <div class="trend-item">
-                        <span class="trend-label">Discussion Activity</span>
-                        <span class="trend-value">{{ trends.activity.emoji }} {{ trends.activity.trend.title() }}</span>
-                    </div>
-                    
-                    <div class="trend-item">
-                        <span class="trend-label">News Volume</span>
-                        <span class="trend-value">{{ trends.news_volume.emoji }} {{ trends.news_volume.trend.title() }}</span>
-                    </div>
-                    
-                    {% if trends.insights %}
-                    <h3 style="color: white; border-left-color: white;">Key Insights</h3>
-                    <ul class="insights-list">
-                        {% for insight in trends.insights %}
-                        <li>{{ insight }}</li>
-                        {% endfor %}
-                    </ul>
-                    {% endif %}
-                </div>
-                {% endif %}
-                
-                {% if executive_summary %}
-                <div class="executive-summary">
-                    <h2>📊 Executive Summary</h2>
-                    {% for paragraph in executive_summary.split('\n\n') %}
-                        {% if paragraph.strip() %}
-                        <p>{{ paragraph.strip() }}</p>
-                        {% endif %}
-                    {% endfor %}
-                </div>
-                {% endif %}
-                
-                {% if top_articles or news_items %}
-                    <h2>🏆 Top {{ (top_articles or news_items)|length }} Voice AI Articles</h2>
-                    {% for item in (top_articles or news_items) %}
-                    <div class="news-item">
-                        <div class="news-title">
-                            <a href="{{ item.url }}" target="_blank">{{ item.title }}</a>
-                        </div>
-                        <div class="news-meta">
-                            <strong>{{ item.source }}</strong> • {{ item.published_date[:10] }}
-                        </div>
-                        <div class="news-summary">
-                            {{ item.summary }}
-                        </div>
-                    </div>
-                    {% endfor %}
-                    
-                    {% if total_articles_found and total_articles_found > (top_articles or news_items)|length %}
-                    <div class="highlight">
-                        <strong>📈 Additional Coverage:</strong> Found {{ total_articles_found }} total articles today. 
-                        Showing the top {{ (top_articles or news_items)|length }} most relevant to voice AI technology.
-                    </div>
-                    {% endif %}
-                {% else %}
-                    <div class="news-item">
-                        <p>No voice AI news found today. The scraper will continue monitoring for updates.</p>
-                    </div>
-                {% endif %}
-                
-                {% if reactions %}
-                <div class="reddit-section">
-                    <h2>💬 Top Reddit Discussions with Sentiment Analysis</h2>
-                    
-                    {% set sentiment_counts = {'positive': 0, 'negative': 0, 'neutral': 0} %}
-                    {% for reaction in reactions %}
-                        {% if sentiment_counts.update({reaction.sentiment: sentiment_counts[reaction.sentiment] + 1}) %}{% endif %}
-                    {% endfor %}
-                    
-                    <div class="sentiment-summary">
-                        <strong>Overall Community Sentiment:</strong> 
-                        😊 {{ sentiment_counts.positive }} Positive | 
-                        😟 {{ sentiment_counts.negative }} Negative | 
-                        😐 {{ sentiment_counts.neutral }} Neutral
-                    </div>
-                    
-                    {% set current_subreddit = '' %}
-                    {% for reaction in reactions %}
-                        {% if reaction.subreddit != current_subreddit %}
-                            {% if current_subreddit != '' %}</div>{% endif %}
-                            {% set current_subreddit = reaction.subreddit %}
-                            <div class="reddit-subreddit">
-                                <h3>r/{{ reaction.subreddit }}</h3>
-                        {% endif %}
-                        
-                        <div class="reddit-post {{ reaction.sentiment }}">
-                            <div class="reddit-meta">
-                                <span>
-                                    <strong>{{ reaction.score }} upvotes</strong> • {{ reaction.num_comments }} comments • {{ reaction.created_date }}
-                                </span>
-                                <span class="sentiment-indicator">
-                                    {{ reaction.sentiment_emoji }} {{ reaction.sentiment.title() }}
-                                </span>
-                            </div>
-                            <div class="reddit-title">
-                                <a href="{{ reaction.url }}" target="_blank">{{ reaction.title }}</a>
-                            </div>
-                            <div class="reddit-summary">
-                                "{{ reaction.summary }}"
-                            </div>
-                            <div class="reddit-links">
-                                <a href="{{ reaction.url }}" target="_blank">💬 Discussion</a>
-                                {% if reaction.external_url %}
-                                <a href="{{ reaction.external_url }}" target="_blank">🌐 External Link</a>
-                                {% endif %}
-                            </div>
-                        </div>
-                        
-                        {% if loop.last %}</div>{% endif %}
-                    {% endfor %}
-                </div>
-                {% endif %}
-                
-                <div class="footer">
-                    <p><strong>Generated by AI Voice News Scraper</strong> on {{ date }}</p>
-                    <p>This digest includes trend analysis, top discussions from Reddit communities with AI-powered sentiment analysis.</p>
-                    {% if trends and trends.available %}
-                    <p><em>Trends based on analysis of the last {{ trends.runs_analyzed }} runs.</em></p>
-                    {% endif %}
-                </div>
-            </div>
+        <h1>AI Voice News Digest - {digest['date']}</h1>
+        <p>Found {len(digest.get('news_items', []))} articles and {len(digest.get('reactions', []))} Reddit discussions.</p>
+        <p>Template file missing - please check templates/email_digest.html</p>
         </body>
         </html>
         """
-        template = jinja2.Template(template_str)
-    
-    # Group reactions by platform for the template
-    reactions_by_platform = {}
-    for reaction in digest.get('reactions', []):
-        platform = reaction['platform']
-        if platform not in reactions_by_platform:
-            reactions_by_platform[platform] = []
-        reactions_by_platform[platform].append(reaction)
-    
-    # Render the template
-    return template.render(
-        date=digest['date'],
-        news_items=digest.get('news_items', []),
-        top_articles=digest.get('top_articles', []),
-        reactions=digest.get('reactions', []),
-        reactions_by_platform=reactions_by_platform,
-        executive_summary=digest.get('executive_summary', ''),
-        total_articles_found=digest.get('total_articles_found', 0),
-        total_reddit_posts=digest.get('total_reddit_posts', 0),
-        trends=digest.get('trends', {}),
-        processing_stats=digest.get('processing_stats', {})
-    )
