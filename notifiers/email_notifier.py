@@ -1,5 +1,5 @@
 """
-Email notifier for AI Voice News Scraper - FIXED VERSION with guaranteed delivery
+Email notifier for AI Voice News Scraper
 """
 import logging
 import os
@@ -35,46 +35,41 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 template_loader = jinja2.FileSystemLoader(searchpath="./templates")
 template_env = jinja2.Environment(loader=template_loader)
 
-def parse_and_validate_emails(email_string: str) -> list:
-    """Parse and validate email addresses with detailed logging"""
+def parse_email_list(email_string: str) -> list:
+    """Parse and validate email addresses"""
     if not email_string:
         return []
-    
-    logger.info(f"Parsing email string: '{email_string}'")
     
     emails = []
     for email in email_string.split(','):
         email = email.strip()
         if email and '@' in email and '.' in email:
             emails.append(email)
-            logger.info(f"  ✅ Valid: {email}")
-        elif email:
-            logger.warning(f"  ❌ Invalid: {email}")
     
-    logger.info(f"Parsed {len(emails)} valid emails: {emails}")
     return emails
 
 def get_all_recipients():
-    """Get all email recipients from TO, CC, and BCC"""
+    """Get all email recipients - treats all as TO recipients"""
     # Force reload environment variables
     load_dotenv(override=True)
     
-    to_emails = parse_and_validate_emails(os.getenv('EMAIL_TO', ''))
-    cc_emails = parse_and_validate_emails(os.getenv('EMAIL_CC', ''))
-    bcc_emails = parse_and_validate_emails(os.getenv('EMAIL_BCC', ''))
+    to_emails = parse_email_list(os.getenv('EMAIL_TO', ''))
+    cc_emails = parse_email_list(os.getenv('EMAIL_CC', ''))
+    bcc_emails = parse_email_list(os.getenv('EMAIL_BCC', ''))
     
-    logger.info(f"📧 Email recipients breakdown:")
-    logger.info(f"  TO ({len(to_emails)}): {to_emails}")
-    logger.info(f"  CC ({len(cc_emails)}): {cc_emails}")
-    logger.info(f"  BCC ({len(bcc_emails)}): {bcc_emails}")
-    
+    # Treat ALL emails as TO recipients to avoid Gmail CC issues
     all_recipients = to_emails + cc_emails + bcc_emails
-    logger.info(f"  TOTAL: {len(all_recipients)} recipients")
     
-    return to_emails, cc_emails, bcc_emails, all_recipients
+    logger.info(f"📧 Email recipients (treating all as TO):")
+    logger.info(f"  Original TO: {to_emails}")
+    logger.info(f"  Original CC: {cc_emails}")
+    logger.info(f"  Original BCC: {bcc_emails}")
+    logger.info(f"  FINAL TO LIST: {all_recipients}")
+    
+    return all_recipients
 
 async def send_email_digest(digest):
-    """Send email digest with guaranteed delivery to ALL recipients"""
+    """Send email digest with guaranteed delivery"""
     logger.info("🚀 Starting email digest send...")
     
     # Force reload environment variables
@@ -91,45 +86,49 @@ async def send_email_digest(digest):
         logger.error("❌ Email configuration incomplete")
         return False
     
-    # Get all recipients
-    to_emails, cc_emails, bcc_emails, all_recipients = get_all_recipients()
+    # Get all recipients (treating all as TO to avoid CC issues)
+    all_recipients = get_all_recipients()
     
     if not all_recipients:
         logger.error("❌ No valid email recipients found")
         return False
     
-    logger.info(f"📧 Will send to {len(all_recipients)} total recipients")
+    logger.info(f"📧 Will send to {len(all_recipients)} recipients (all as TO)")
     
     try:
         # Build enhanced digest
         enhanced_digest = await build_enhanced_digest(digest)
         html_content = format_digest_for_email(enhanced_digest)
         
-        # Try sending email
-        success = await send_email_with_fallback(
+        # Strategy 1: Send to all as TO recipients (avoids Gmail CC issues)
+        success = await send_all_as_to_recipients(
             smtp_server, smtp_port, smtp_username, smtp_password, email_from,
-            to_emails, cc_emails, bcc_emails, all_recipients,
-            digest['date'], html_content
+            all_recipients, digest['date'], html_content
         )
         
         if success:
             logger.info(f"✅ Email sent successfully to all {len(all_recipients)} recipients!")
             return True
-        else:
-            logger.error("❌ Email sending failed")
-            return False
+        
+        # Strategy 2: If that fails, send individually
+        logger.warning("Bulk send failed, trying individual sends...")
+        success = await send_individually(
+            smtp_server, smtp_port, smtp_username, smtp_password, email_from,
+            all_recipients, digest['date'], html_content
+        )
+        
+        return success
             
     except Exception as e:
         logger.error(f"❌ Email digest failed: {e}")
         return False
 
-async def send_email_with_fallback(smtp_server, smtp_port, smtp_username, smtp_password, 
-                                 email_from, to_emails, cc_emails, bcc_emails, 
-                                 all_recipients, date, html_content):
-    """Send email with fallback strategies"""
+async def send_all_as_to_recipients(smtp_server, smtp_port, smtp_username, smtp_password, 
+                                  email_from, all_recipients, date, html_content):
+    """Send to all recipients as TO (avoids Gmail CC delivery issues)"""
     
-    # Strategy 1: Try proper TO/CC/BCC structure
-    logger.info("📧 Attempting structured send (TO/CC/BCC)...")
+    logger.info(f"📧 Sending to all {len(all_recipients)} as TO recipients...")
+    
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls()
@@ -138,12 +137,7 @@ async def send_email_with_fallback(smtp_server, smtp_port, smtp_username, smtp_p
             msg = MIMEMultipart('alternative')
             msg['Subject'] = f"🔊 AI Voice News Digest - {date}"
             msg['From'] = email_from
-            
-            if to_emails:
-                msg['To'] = ', '.join(to_emails)
-            if cc_emails:
-                msg['Cc'] = ', '.join(cc_emails)
-            # BCC not added to headers
+            msg['To'] = ', '.join(all_recipients)  # All as TO recipients
             
             msg.attach(MIMEText(html_content, 'html'))
             
@@ -151,16 +145,21 @@ async def send_email_with_fallback(smtp_server, smtp_port, smtp_username, smtp_p
             failed = server.sendmail(email_from, all_recipients, msg.as_string())
             
             if not failed:
-                logger.info("✅ Structured send successful!")
+                logger.info(f"✅ Successfully sent to all {len(all_recipients)} recipients as TO!")
                 return True
             else:
-                logger.warning(f"⚠️ Structured send had failures: {failed}")
+                logger.warning(f"⚠️ Some recipients failed: {failed}")
+                return False
     
     except Exception as e:
-        logger.warning(f"⚠️ Structured send failed: {e}")
+        logger.error(f"❌ Bulk TO send failed: {e}")
+        return False
+
+async def send_individually(smtp_server, smtp_port, smtp_username, smtp_password, 
+                          email_from, all_recipients, date, html_content):
+    """Send individually to each recipient as fallback"""
     
-    # Strategy 2: Send individually to each recipient
-    logger.info("📧 Attempting individual sends...")
+    logger.info(f"📧 Sending individually to {len(all_recipients)} recipients...")
     successful_sends = 0
     
     try:
@@ -196,7 +195,6 @@ async def send_email_with_fallback(smtp_server, smtp_port, smtp_username, smtp_p
         return False
     
     logger.info(f"📊 Individual send results: {successful_sends}/{len(all_recipients)} successful")
-    
     return successful_sends > 0
 
 async def build_enhanced_digest(digest):
