@@ -1,5 +1,5 @@
 """
-AI Voice News Scraper - Main Entry Point (Fixed Imports)
+AI Voice News Scraper - Main Entry Point (Updated for guaranteed email delivery)
 """
 import asyncio
 import logging
@@ -37,7 +37,7 @@ async def run_pipeline(logger):
         from processors.content_processor import process_content
         from storage.db_manager import store_news_item, store_reaction, store_run_summary
         from notifiers.slack_notifier import send_slack_digest
-        from notifiers.email_notifier import send_email_digest
+        from notifiers.email_notifier_fixed import send_email_digest_guaranteed  # Use the fixed version
         from processors.trends_analyzer import analyze_current_trends
     except ImportError as e:
         logger.error(f"Import error: {e}")
@@ -75,12 +75,10 @@ async def run_pipeline(logger):
         try:
             reactions = await scrape_reddit()
             
-            # Extract scanning metadata if available
             if reactions and '_metadata' in reactions[0]:
                 metadata = reactions[0]['_metadata']
                 total_reddit_scanned = metadata.get('total_scanned', 0)
                 logger.info(f"📊 Reddit scanning stats: {total_reddit_scanned} posts scanned, {len(reactions)} relevant")
-                # Remove metadata before storing
                 del reactions[0]['_metadata']
             
             for reaction in reactions:
@@ -91,34 +89,6 @@ async def run_pipeline(logger):
     else:
         logger.info("Reddit API credentials not configured, skipping Reddit scraping")
     
-    # Calculate sentiment summary for trends
-    sentiment_counts = {'positive': 0, 'negative': 0, 'neutral': 0}
-    subreddit_activity = {}
-
-    for reaction in reactions:
-        sentiment = reaction.get('sentiment', 'neutral')
-        sentiment_counts[sentiment] += 1
-        
-        subreddit = reaction.get('subreddit', 'unknown')
-        subreddit_activity[subreddit] = subreddit_activity.get(subreddit, 0) + 1
-
-    # Prepare run data for trends analysis
-    current_run_data = {
-        'articles_found': len(news_items),
-        'articles_processed': len(processed_items),
-        'reddit_posts': len(reactions),
-        'total_reddit_scanned': total_reddit_scanned,
-        'sentiment_summary': sentiment_counts,
-        'subreddit_activity': subreddit_activity
-    }
-
-    # Store this run's summary for future trend analysis
-    try:
-        await store_run_summary(current_run_data)
-        logger.info("📊 Stored run summary for trends analysis")
-    except Exception as e:
-        logger.error(f"Failed to store run summary: {e}")
-    
     # Step 4: Send notifications
     if processed_items or reactions:
         digest = {
@@ -128,11 +98,11 @@ async def run_pipeline(logger):
             'total_reddit_scanned': total_reddit_scanned
         }
         
-        # Email
+        # Email with guaranteed delivery
         if all([os.getenv('SMTP_SERVER'), os.getenv('EMAIL_FROM'), os.getenv('EMAIL_TO')]):
             try:
-                await send_email_digest(digest)
-                logger.info("✅ Email sent")
+                await send_email_digest_guaranteed(digest)
+                logger.info("✅ Email sent with guaranteed delivery")
             except Exception as e:
                 logger.error(f"Email failed: {e}")
         else:
